@@ -1,6 +1,26 @@
 import React, { useState, FormEvent } from "react";
 import {
   ShieldCheck,
+  PawPrint,
+  Home,
+  Building2,
+  Activity,
+  Gavel,
+  Car,
+  Stethoscope,
+  PlusSquare,
+  Dog,
+  UserX,
+  Accessibility,
+  AlertTriangle,
+  Banknote,
+  Wallet,
+  ClipboardList,
+  ClipboardSignature,
+  CreditCard,
+  Coins,
+  Skull,
+  Heart,
   HeartPulse,
   Briefcase,
   PiggyBank,
@@ -83,7 +103,7 @@ const initialContracts: Contract[] = [
     versicherungsart: "Wohngebäude",
     vsnr: "9876543",
     beitrag: "987,00 €",
-    datenaktualisierung: "-",
+    datenaktualisierung: "Ja",
   },
   {
     status: "none",
@@ -91,7 +111,7 @@ const initialContracts: Contract[] = [
     versicherungsart: "Rechtsschutz",
     vsnr: "765432",
     beitrag: "333,00 €",
-    datenaktualisierung: "-",
+    datenaktualisierung: "Ja",
   },
   {
     status: "none",
@@ -107,7 +127,7 @@ const initialContracts: Contract[] = [
     versicherungsart: "Privathaftpflicht",
     vsnr: " - ",
     beitrag: "64,66 €",
-    datenaktualisierung: " - ",
+    datenaktualisierung: " Ja ",
   },
   {
     status: "kuendigung",
@@ -170,6 +190,37 @@ const beschreibungen: Record<string, string> = {
   "Spezialtarife":
     "Spezielle Lösungen, oft maßgeschneidert für individuelle Lebenssituationen.",
 };
+
+
+const productIcons: Record<string, JSX.Element> = {
+  "Privathaftpflicht": <ShieldCheck className="w-4 h-4 text-gray-600" />,
+  "Tierhalterhaftpflicht": <PawPrint className="w-4 h-4 text-gray-600" />,
+  "Hausrat": <Home className="w-4 h-4 text-gray-600" />,
+  "Wohngebäude": <Building2 className="w-4 h-4 text-gray-600" />,
+  "Unfallversicherung": <Activity className="w-4 h-4 text-gray-600" />,
+  "Rechtsschutzversicherung": <Gavel className="w-4 h-4 text-gray-600" />,
+  "Kfz-Versicherung": <Car className="w-4 h-4 text-gray-600" />,
+  "Vollversicherung (PKV)": <Stethoscope className="w-4 h-4 text-gray-600" />,
+  "Zusatzversicherung": <PlusSquare className="w-4 h-4 text-gray-600" />,
+  "Pflegeversicherung": <HeartPulse className="w-4 h-4 text-gray-600" />,
+  "Tierkrankenversicherung": <Dog className="w-4 h-4 text-gray-600" />,
+  "Berufsunfähigkeit": <Briefcase className="w-4 h-4 text-gray-600" />,
+  "Erwerbsunfähigkeit": <UserX className="w-4 h-4 text-gray-600" />,
+  "Grundfähigkeitsversicherung": <Accessibility className="w-4 h-4 text-gray-600" />,
+  "Dread Disease": <AlertTriangle className="w-4 h-4 text-gray-600" />,
+  "Basis-Rente": <Banknote className="w-4 h-4 text-gray-600" />,
+  "Sofort-Basis-Rente": <Wallet className="w-4 h-4 text-gray-600" />,
+  "Riester-Rente": <PiggyBank className="w-4 h-4 text-gray-600" />,
+  "Direktversicherung": <ClipboardList className="w-4 h-4 text-gray-600" />,
+  "Direktversicherung BU": <ClipboardSignature className="w-4 h-4 text-gray-600" />,
+  "Unterstützungskasse": <CreditCard className="w-4 h-4 text-gray-600" />,
+  "Private Rente": <Coins className="w-4 h-4 text-gray-600" />,
+  "Sofortrente": <Coins className="w-4 h-4 text-gray-600" />,
+  "Risikolebensversicherung": <Heart className="w-4 h-4 text-gray-600" />,
+  "Sterbegeldversicherung": <Skull className="w-4 h-4 text-gray-600" />,
+  "Kinderspezialtarife": <Baby className="w-4 h-4 text-gray-600" />,
+};
+
 
 const icons: Record<string, JSX.Element> = {
   "Alltag": <ShieldCheck className="w-5 h-5 text-red-500" />,
@@ -645,7 +696,7 @@ export default function App() {
                 onClick={() => setSelectedProduct(produkt)}
                 className="bg-gray-50 p-3 rounded-xl text-left hover:bg-gray-100 transition"
               >
-                <div className="font-medium">{produkt}</div>
+                <div className="flex items-center gap-2 font-medium">{productIcons[produkt]} {produkt}</div>
                 <div className="text-sm text-gray-600">
                   {tooltipTexte[produkt].split("\n")[1] || tooltipTexte[produkt]}
                 </div>
