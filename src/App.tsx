@@ -28,7 +28,7 @@ import {
   Baby,
   Folder,
   Video,
-  X,
+  X, Search,
 } from "lucide-react";
 
 // Einfaches Dialog-Modal (für Vertragsliste)
@@ -42,6 +42,24 @@ const Dialog = ({
   children: React.ReactNode;
 }) => {
   if (!open) return null;
+  
+  const highlightMatch = (text: string, query: string): JSX.Element | string => {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase() ? (
+            <mark key={i} className="bg-yellow-200">{part}</mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
+
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 max-w-4xl w-full shadow-xl relative">
@@ -70,6 +88,24 @@ const Sheet = ({
   children: React.ReactNode;
 }) => {
   if (!open) return null;
+  
+  const highlightMatch = (text: string, query: string): JSX.Element | string => {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase() ? (
+            <mark key={i} className="bg-yellow-200">{part}</mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
+
+
   return (
     <div className="fixed inset-0 flex justify-end z-50">
       <div className="w-full sm:w-96 bg-white p-6 shadow-xl h-full overflow-auto relative">
@@ -513,15 +549,20 @@ export default function App() {
   const [newBeitrag, setNewBeitrag] = useState("");
   const [newDatenaktualisierung, setNewDatenaktualisierung] = useState("");
 
-  const filteredFields = Object.entries(versicherungen).filter(
-    ([feld, produkte]) =>
-      feld.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      produkte.some((p) =>
-        p.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-  );
+  const filteredFields = Object.entries(versicherungen).filter(([feld, produkte]) => {
+    const feldMatch = feld.toLowerCase().includes(searchQuery.toLowerCase());
+    const beschreibungMatch = beschreibungen[feld]?.toLowerCase().includes(searchQuery.toLowerCase());
+  
+    const produktMatch = produkte.some((produkt) => {
+      const produktTitelMatch = produkt.toLowerCase().includes(searchQuery.toLowerCase());
+      const produktBeschreibungMatch = beschreibungen[produkt]?.toLowerCase().includes(searchQuery.toLowerCase());
+      return produktTitelMatch || produktBeschreibungMatch;
+    });
+  
+    return feldMatch || beschreibungMatch || produktMatch;
+  });  
 
-  const handleAddContract = (e: FormEvent) => {
+const handleAddContract = (e: FormEvent) => {
     e.preventDefault();
     const newContract: Contract = {
       status: "none",
@@ -539,6 +580,24 @@ export default function App() {
     setNewBeitrag("");
     setNewDatenaktualisierung("");
   };
+
+  
+  const highlightMatch = (text: string, query: string): JSX.Element | string => {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase() ? (
+            <mark key={i} className="bg-yellow-200">{part}</mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
+
 
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-10">
@@ -647,43 +706,51 @@ export default function App() {
         </div>
       </Dialog>
 
-      {/* Suche und Kacheln "Neue Versicherungen finden" */}
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Jetzt neue Versicherungen finden</h2>
-        <div className="relative mb-6">
-          <input
-            type="text"
-            placeholder="Suche nach Versicherung oder Thema..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              aria-label="Suchfeld leeren"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+   {/* Suche und Kacheln "Neue Versicherungen finden" */}
+<section>
+  <h2 className="text-xl font-semibold mb-4">Jetzt neue Versicherungen finden</h2>
+
+  <div className="relative mb-6">
+    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+    <input
+      type="text"
+      placeholder="Suche nach Versicherung oder Thema..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
+    />
+    {searchQuery && (
+      <button
+        onClick={() => setSearchQuery("")}
+        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        aria-label="Suchfeld leeren"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    )}
+  </div>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {filteredFields.length === 0 && (
+      <div className="text-gray-500 italic">Keine passenden Kategorien oder Produkte gefunden.</div>
+    )}
+    {filteredFields.map(([feld]) => (
+      <button
+        key={feld}
+        onClick={() => setSelectedField(feld)}
+        className="text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
+      >
+        <div className="flex items-center gap-2 font-medium">
+          {icons[feld]}
+          {feld}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredFields.map(([feld]) => (
-            <button
-              key={feld}
-              onClick={() => setSelectedField(feld)}
-              className="text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
-            >
-              <div className="flex items-center gap-2 font-medium">
-                {icons[feld]}
-                {feld}
-              </div>
-              <div className="text-sm text-gray-600">{beschreibungen[feld]}</div>
-            </button>
-          ))}
+        <div className="text-sm text-gray-600">
+          {highlightMatch(beschreibungen[feld], searchQuery)}
         </div>
-      </section>
+      </button>
+    ))}
+  </div>
+</section>
 
       {/* Dialog-Modal für ausgewähltes Versicherungsfeld */}
       <Dialog open={!!selectedField} onClose={() => setSelectedField(null)}>
@@ -696,7 +763,7 @@ export default function App() {
                 onClick={() => setSelectedProduct(produkt)}
                 className="bg-gray-50 p-3 rounded-xl text-left hover:bg-gray-100 transition"
               >
-                <div className="flex items-center gap-2 font-medium">{productIcons[produkt]} {produkt}</div>
+                <div className="flex items-center gap-2 font-medium">{productIcons[produkt]} {highlightMatch(produkt, searchQuery)}</div>
                 <div className="text-sm text-gray-600">
                   {tooltipTexte[produkt].split("\n")[1] || tooltipTexte[produkt]}
                 </div>
