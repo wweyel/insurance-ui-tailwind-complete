@@ -28,7 +28,10 @@ import {
   Baby,
   Folder,
   Video,
-  X, Search,
+  X,
+  Search,
+  HelpCircle, // 👉 DAS MUSS HINZUGEFÜGT WERDEN
+  CheckCircle
 } from "lucide-react";
 
 // Einfaches Dialog-Modal (für Vertragsliste)
@@ -537,6 +540,69 @@ const kriterien: Record<string, string[]> = {
 
 export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [showResults, setShowResults] = useState(false);
+
+  const questions = [
+    "Hast du Kinder oder planst du in nächster Zeit Nachwuchs?",
+    "Besitzt du ein eigenes Haus oder eine Eigentumswohnung?",
+    "Hast du ein oder mehrere Haustiere?",
+    "Bist du selbstständig oder freiberuflich tätig?",
+    "Hast du ein eigenes Auto, das du regelmäßig nutzt?",
+    "Willst du für das Alter privat vorsorgen?",
+    "Möchtest du deine Familie im Todesfall absichern?",
+  ];
+
+  const gewichtLabels: Record<number, string> = {
+    5: "Pflicht",
+    4: "sehr wichtig",
+    3: "wichtig",
+    2: "weniger wichtig",
+    1: "bedingt wichtig",
+  };
+
+  const recommendations: Record<number, { produkt: string; gewichtung: number }[]> = {
+    0: [{ produkt: "Kinderspezialtarife", gewichtung: 4 }],
+    1: [
+      { produkt: "Wohngebäude", gewichtung: 5 },
+      { produkt: "Hausrat", gewichtung: 4 },
+    ],
+    2: [
+      { produkt: "Tierhalterhaftpflicht", gewichtung: 5 },
+      { produkt: "Tierkrankenversicherung", gewichtung: 3 },
+    ],
+    3: [
+      { produkt: "Berufsunfähigkeit", gewichtung: 5 },
+      { produkt: "Basis-Rente", gewichtung: 3 },
+      { produkt: "Private Rente", gewichtung: 2 },
+    ],
+    4: [{ produkt: "Kfz-Versicherung", gewichtung: 5 }],
+    5: [
+      { produkt: "Riester-Rente", gewichtung: 4 },
+      { produkt: "Private Rente", gewichtung: 3 },
+    ],
+    6: [
+      { produkt: "Risikolebensversicherung", gewichtung: 5 },
+      { produkt: "Sterbegeldversicherung", gewichtung: 2 },
+    ],
+  };
+  
+  const gewichteteEmpfehlungen: Record<string, number> = {};
+  Object.entries(answers).forEach(([frageIndex, antwort]) => {
+    if (antwort === "ja") {
+      const empfohlene = recommendations[parseInt(frageIndex)];
+      empfohlene?.forEach(({ produkt, gewichtung }) => {
+        gewichteteEmpfehlungen[produkt] = (gewichteteEmpfehlungen[produkt] || 0) + gewichtung;
+      });
+    }
+  });
+  
+  const resultProducts = Object.entries(gewichteteEmpfehlungen)
+    .sort((a, b) => b[1] - a[1])
+    .map(([produkt, gewichtung]) => ({ produkt, gewichtung }));
+  
+
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [showContractsModal, setShowContractsModal] = useState(false);
@@ -752,6 +818,20 @@ const handleAddContract = (e: FormEvent) => {
   </div>
 </section>
 
+<section>
+  <h2 className="text-xl font-semibold mb-4">Persönlicher Bedarfscheck</h2>
+  <button
+    onClick={() => setShowAnalysisModal(true)}
+    className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg border border-gray-200 transition text-left w-full"
+  >
+    <div className="flex items-center gap-3">
+      <HelpCircle className="w-5 h-5 text-red-500" />
+      <h3 className="font-semibold">Bedarfsanalyse starten</h3>
+    </div>
+  </button>
+</section>
+
+
       {/* Dialog-Modal für ausgewähltes Versicherungsfeld */}
       <Dialog open={!!selectedField} onClose={() => setSelectedField(null)}>
         <h3 className="text-lg font-semibold mb-4">{selectedField}</h3>
@@ -796,7 +876,12 @@ const handleAddContract = (e: FormEvent) => {
             </div>
             <div className="text-sm">
               <strong>Vergleich:</strong>{" "}
-              <a href="#" className="text-blue-600 hover:underline">
+              <a
+                href="/vergleichsrechner"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:underline"
+              >
                 Zum Vergleichsrechner
               </a>
             </div>
@@ -827,6 +912,81 @@ const handleAddContract = (e: FormEvent) => {
           </div>
         </button>
       </section>
+      <Dialog
+        open={showAnalysisModal}
+        onClose={() => {
+          setShowAnalysisModal(false);
+          setAnswers({});
+          setShowResults(false);
+        }}
+      >
+        {!showResults ? (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold">Fragen zur Lebenssituation</h3>
+            {questions.map((q, idx) => (
+              <div key={idx} className="space-y-2">
+                <p className="font-medium">{q}</p>
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setAnswers({ ...answers, [idx]: "ja" })}
+                    className={`px-4 py-2 rounded-md ${
+                      answers[idx] === "ja"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100"
+                    }`}
+                  >
+                    Ja
+                  </button>
+                  <button
+                    onClick={() => setAnswers({ ...answers, [idx]: "nein" })}
+                    className={`px-4 py-2 rounded-md ${
+                      answers[idx] === "nein"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100"
+                    }`}
+                  >
+                    Nein
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => setShowResults(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+            >
+              Auswertung anzeigen
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <h3 className="text-xl font-semibold">Empfohlene Produkte</h3>
+            {resultProducts.length > 0 ? (
+              resultProducts.map(({ produkt, gewichtung }) => (
+                <button
+                  key={produkt}
+                  onClick={() => {
+                    setSelectedProduct(produkt);
+                    setShowAnalysisModal(false);
+                  }}
+                  className="w-full bg-gray-100 hover:bg-gray-200 rounded-lg p-3 text-left flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" /> {produkt}
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    Relevanz: {gewichtung}/5 – {gewichtLabels[gewichtung] || ""}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="text-gray-500 italic">
+                Es konnten keine spezifischen Empfehlungen abgeleitet werden.
+              </p>
+            )}
+          </div>
+        )}
+      </Dialog>
+
     </div>
   );
 }
