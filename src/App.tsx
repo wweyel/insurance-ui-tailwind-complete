@@ -1,4 +1,6 @@
-import React, { useState, FormEvent } from "react";
+import React, { useState, FormEvent, useEffect } from "react";
+import Dialog from "./Dialog";
+import Sheet from "./Sheet";
 import {
   ShieldCheck,
   PawPrint,
@@ -34,98 +36,10 @@ import {
   CheckCircle
 } from "lucide-react";
 
-// Einfaches Dialog-Modal (für Vertragsliste)
-const Dialog = ({
-  open,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) => {
-  if (!open) return null;
-  
-  const highlightMatch = (text: string, query: string): JSX.Element | string => {
-    if (!query) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === query.toLowerCase() ? (
-            <mark key={i} className="bg-yellow-200">{part}</mark>
-          ) : (
-            part
-          )
-        )}
-      </>
-    );
-  };
-
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 max-w-4xl w-full shadow-xl relative">
-        <div className="flex justify-end mb-4">
-          <a
-            onClick={onClose}
-            className="text-blue-600 hover:underline cursor-pointer"
-          >
-            Schließen
-          </a>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-};
-
-// Einfaches Sheet (Drawer) für detaillierte Produktbeschreibung
-const Sheet = ({
-  open,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) => {
-  if (!open) return null;
-  
-  const highlightMatch = (text: string, query: string): JSX.Element | string => {
-    if (!query) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === query.toLowerCase() ? (
-            <mark key={i} className="bg-yellow-200">{part}</mark>
-          ) : (
-            part
-          )
-        )}
-      </>
-    );
-  };
-
-
-  return (
-    <div className="fixed inset-0 flex justify-end z-50">
-      <div className="w-full sm:w-96 bg-white p-6 shadow-xl h-full overflow-auto relative">
-        <button
-          onClick={onClose}
-          className="text-blue-600 hover:underline mb-4 absolute top-4 right-4"
-        >
-          Schließen
-        </button>
-        <div className="mt-10">{children}</div>
-      </div>
-    </div>
-  );
-};
 
 // Typdefinition für einen Vertrag
 type Contract = {
+  id: string; // Neue ID-Eigenschaft
   status: string;
   versicherer: string;
   versicherungsart: string;
@@ -135,8 +49,10 @@ type Contract = {
 };
 
 // Initiale Vertragsdaten
-const initialContracts: Contract[] = [
+const savedContracts = localStorage.getItem("contracts");
+const initialContracts: Contract[] = savedContracts ? JSON.parse(savedContracts) : [
   {
+    id: "1",
     status: "optimieren",
     versicherer: "Allianz Versicherungs-AG",
     versicherungsart: "Wohngebäude",
@@ -145,6 +61,7 @@ const initialContracts: Contract[] = [
     datenaktualisierung: "Ja",
   },
   {
+    id: "2",
     status: "none",
     versicherer: "VHV Versicherungen",
     versicherungsart: "Rechtsschutz",
@@ -153,6 +70,7 @@ const initialContracts: Contract[] = [
     datenaktualisierung: "Ja",
   },
   {
+    id: "3",
     status: "none",
     versicherer: "AdmiralDirekt.de",
     versicherungsart: "Kfz-Versicherung",
@@ -161,6 +79,7 @@ const initialContracts: Contract[] = [
     datenaktualisierung: " - ",
   },
   {
+    id: "4",
     status: "none",
     versicherer: "Gothaer Allgemeine Versicherung AG",
     versicherungsart: "Privathaftpflicht",
@@ -169,6 +88,7 @@ const initialContracts: Contract[] = [
     datenaktualisierung: " Ja ",
   },
   {
+    id: "5",
     status: "kuendigung",
     versicherer: "Alte Leipziger Lebensversicherung a.G.",
     versicherungsart: "Privathaftpflicht",
@@ -177,6 +97,31 @@ const initialContracts: Contract[] = [
     datenaktualisierung: " - ",
   },
 ];
+
+// Vertragsbearbeitung starten
+const handleEdit = (contract: Contract) => {
+  setEditingContract({ ...contract }); // Vertrag wird zur Bearbeitung gesetzt
+};
+
+// Vertragsbearbeitung speichern
+const handleSaveEdit = (e: FormEvent) => {
+  e.preventDefault();
+  if (editingContract) {
+      const updatedContracts = contracts.map(contract => 
+          contract.id === editingContract.id ? editingContract : contract
+      );
+      setContracts(updatedContracts);
+      localStorage.setItem("contracts", JSON.stringify(updatedContracts)); // Speichern in localStorage
+      setEditingContract(null); // Bearbeitungsmodus beenden
+  }
+};
+
+// Vertrag löschen
+const handleDelete = (id: string) => {
+  const updatedContracts = contracts.filter(contract => contract.id !== id);
+  setContracts(updatedContracts);
+  localStorage.setItem("contracts", JSON.stringify(updatedContracts)); // Speichern in localStorage
+};
 
 // Versicherungsfelder und Produktlisten
 const versicherungen = {
@@ -538,149 +483,73 @@ const kriterien: Record<string, string[]> = {
   ],
 };
 
+
+// 🔥 Vergleichsbild-Modal-Komponente (Vollformatig)
+const ComparisonImageModal = ({
+open,
+onClose,
+imageUrl
+}: {
+open: boolean;
+onClose: () => void;
+imageUrl: string;
+}) => {
+if (!open) return null;
+
+return (
+  <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+    <div className="relative w-full h-full flex items-center justify-center">
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-white text-2xl hover:text-gray-300 z-50"
+      >
+        ❌
+      </button>
+      <img src={imageUrl} alt="Vergleichsbild" className="w-full h-full object-contain" />
+    </div>
+  </div>
+);
+};
+
 export default function App() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [answers, setAnswers] = useState<Record<number, string>>({}); // 🟢 Wichtig: Aktiviert!
   const [showResults, setShowResults] = useState(false);
+  const [searchQuery] = useState("");
 
-  const questions = [
-    "Hast du Kinder oder planst du in nächster Zeit Nachwuchs?",
-    "Besitzt du ein eigenes Haus oder eine Eigentumswohnung?",
-    "Hast du ein oder mehrere Haustiere?",
-    "Bist du selbstständig oder freiberuflich tätig?",
-    "Hast du ein eigenes Auto, das du regelmäßig nutzt?",
-    "Willst du für das Alter privat vorsorgen?",
-    "Möchtest du deine Familie im Todesfall absichern?",
-  ];
+  const [showComparisonImageModal, setShowComparisonImageModal] = useState(false);
+  const [comparisonImage, setComparisonImage] = useState<string>("");
 
-  const gewichtLabels: Record<number, string> = {
-    5: "Pflicht",
-    4: "sehr wichtig",
-    3: "wichtig",
-    2: "weniger wichtig",
-    1: "bedingt wichtig",
-  };
-
-  const recommendations: Record<number, { produkt: string; gewichtung: number }[]> = {
-    0: [{ produkt: "Kinderspezialtarife", gewichtung: 4 }],
-    1: [
-      { produkt: "Wohngebäude", gewichtung: 5 },
-      { produkt: "Hausrat", gewichtung: 4 },
-    ],
-    2: [
-      { produkt: "Tierhalterhaftpflicht", gewichtung: 5 },
-      { produkt: "Tierkrankenversicherung", gewichtung: 3 },
-    ],
-    3: [
-      { produkt: "Berufsunfähigkeit", gewichtung: 5 },
-      { produkt: "Basis-Rente", gewichtung: 3 },
-      { produkt: "Private Rente", gewichtung: 2 },
-    ],
-    4: [{ produkt: "Kfz-Versicherung", gewichtung: 5 }],
-    5: [
-      { produkt: "Riester-Rente", gewichtung: 4 },
-      { produkt: "Private Rente", gewichtung: 3 },
-    ],
-    6: [
-      { produkt: "Risikolebensversicherung", gewichtung: 5 },
-      { produkt: "Sterbegeldversicherung", gewichtung: 2 },
-    ],
-  };
+  const handleOpenComparisonModal = (product: string) => {
+    let imageUrl = "";
   
-  const gewichteteEmpfehlungen: Record<string, number> = {};
-  Object.entries(answers).forEach(([frageIndex, antwort]) => {
-    if (antwort === "ja") {
-      const empfohlene = recommendations[parseInt(frageIndex)];
-      empfohlene?.forEach(({ produkt, gewichtung }) => {
-        gewichteteEmpfehlungen[produkt] = (gewichteteEmpfehlungen[produkt] || 0) + gewichtung;
-      });
+    switch (product) {
+      case "Privathaftpflicht":
+        imageUrl = "/PHV.png";
+        break;
+      case "Wohngebäude":
+        imageUrl = "/Wohngebaeude.png";
+        break;
+      case "Unfallversicherung":
+        imageUrl = "/Unfall.png";
+        break;
+      case "Kfz-Versicherung":
+        imageUrl = "/Kfz.png";
+        break;
+      default:
+        imageUrl = "";
+        break;
     }
-  });
   
-  const resultProducts = Object.entries(gewichteteEmpfehlungen)
-    .sort((a, b) => b[1] - a[1])
-    .map(([produkt, gewichtung]) => ({ produkt, gewichtung }));
-  
-
-  const [selectedField, setSelectedField] = useState<string | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
-  const [showContractsModal, setShowContractsModal] = useState(false);
-  const [contracts, setContracts] = useState<Contract[]>(initialContracts);
-
-  // Zustände für das Formular zum Hinzufügen eines neuen Vertrags
-  const [newVersicherer, setNewVersicherer] = useState("");
-  const [newVersicherungsart, setNewVersicherungsart] = useState("");
-  const [newVsnr, setNewVsnr] = useState("");
-  const [newBeitrag, setNewBeitrag] = useState("");
-  const [newDatenaktualisierung, setNewDatenaktualisierung] = useState("");
-
-  const filteredFields = Object.entries(versicherungen).filter(([feld, produkte]) => {
-    const feldMatch = feld.toLowerCase().includes(searchQuery.toLowerCase());
-    const beschreibungMatch = beschreibungen[feld]?.toLowerCase().includes(searchQuery.toLowerCase());
-  
-    const produktMatch = produkte.some((produkt) => {
-      const produktTitelMatch = produkt.toLowerCase().includes(searchQuery.toLowerCase());
-      const produktBeschreibungMatch = beschreibungen[produkt]?.toLowerCase().includes(searchQuery.toLowerCase());
-      return produktTitelMatch || produktBeschreibungMatch;
-    });
-  
-    return feldMatch || beschreibungMatch || produktMatch;
-  });  
-
-const handleAddContract = (e: FormEvent) => {
-    e.preventDefault();
-    const newContract: Contract = {
-      status: "none",
-      versicherer: newVersicherer,
-      versicherungsart: newVersicherungsart,
-      vsnr: newVsnr,
-      beitrag: newBeitrag,
-      datenaktualisierung: newDatenaktualisierung,
-    };
-    setContracts([...contracts, newContract]);
-    // Formularfelder zurücksetzen
-    setNewVersicherer("");
-    setNewVersicherungsart("");
-    setNewVsnr("");
-    setNewBeitrag("");
-    setNewDatenaktualisierung("");
+    if (imageUrl) {
+      setComparisonImage(imageUrl);
+      setShowComparisonImageModal(true);
+    }
   };
-
-  
-  const highlightMatch = (text: string, query: string): JSX.Element | string => {
-    if (!query) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === query.toLowerCase() ? (
-            <mark key={i} className="bg-yellow-200">{part}</mark>
-          ) : (
-            part
-          )
-        )}
-      </>
-    );
-  };
-
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-10">
-      {/* Versicherungsordner-Kachel */}
-      <section>
-        <h2 className="text-xl font-semibold mb-4">Meine Versicherungen</h2>
-        <button
-          onClick={() => setShowContractsModal(true)}
-          className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg border border-gray-200 transition text-left w-full"
-        >
-          <div className="flex items-center gap-3">
-            <Folder className="w-5 h-5 text-red-500" />
-            <h3 className="font-semibold">Versicherungsordner</h3>
-          </div>
-        </button>
-      </section>
-
+    <>
       {/* Großes Modal mit Vertragsliste und Formular */}
       <Dialog open={showContractsModal} onClose={() => setShowContractsModal(false)}>
         <div className="mb-6">
@@ -689,38 +558,74 @@ const handleAddContract = (e: FormEvent) => {
         <table className="table-auto w-full border-collapse text-sm mb-6">
           <thead className="bg-gray-100">
             <tr>
-              <th className="p-2 text-left w-32"></th>
-              <th className="p-2 text-left">Versicherer</th>
-              <th className="p-2 text-left">Versicherungsart</th>
-              <th className="p-2 text-left">VSNR</th>
-              <th className="p-2 text-left">Beitrag (Jahr)</th>
-              <th className="p-2 text-left">Datenaktualisierung</th>
+              <th>Status</th>
+              <th>Versicherer</th>
+              <th>Versicherungsart</th>
+              <th>VSNR</th>
+              <th>Beitrag</th>
+              <th>Datenaktualisierung</th>
+              <th>Aktionen</th>
             </tr>
           </thead>
           <tbody>
-            {contracts.map((row, i) => (
-              <tr key={i} className="border-b last:border-0">
-                <td className="p-2">
-                  {row.status === "optimieren" && (
-                    <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs">
-                      Optimieren
-                    </span>
-                  )}
-                  {row.status === "kuendigung" && (
-                    <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">
-                      Kündigung beantragt
-                    </span>
-                  )}
+            {contracts.map((contract, index) => (
+              <tr key={contract.id || index} className="border-b">
+                <td>{contract.status === "none" ? "" : contract.status}</td>
+                <td>{contract.versicherer}</td>
+                <td>{contract.versicherungsart}</td>
+                <td>{contract.vsnr || "-"}</td>
+                <td>{contract.beitrag || "-"}</td>
+                <td>{contract.datenaktualisierung || "-"}</td>
+                <td>
+                  <button onClick={() => handleEdit(contract)}>✏️</button>
+                  <button onClick={() => handleDelete(contract.id)}>🗑️</button>
                 </td>
-                <td className="p-2">{row.versicherer}</td>
-                <td className="p-2">{row.versicherungsart}</td>
-                <td className="p-2">{row.vsnr}</td>
-                <td className="p-2">{row.beitrag}</td>
-                <td className="p-2">{row.datenaktualisierung}</td>
               </tr>
             ))}
           </tbody>
         </table>
+    
+        {editingContract && (
+          <form onSubmit={handleSaveEdit} className="mb-6 grid gap-4 mt-4">
+            <input
+              type="text"
+              value={editingContract.versicherer}
+              onChange={e => setEditingContract({ ...editingContract, versicherer: e.target.value })}
+              className="border border-gray-300 p-2 rounded"
+              placeholder="Versicherer"
+            />
+            <input
+              type="text"
+              value={editingContract.versicherungsart}
+              onChange={e => setEditingContract({ ...editingContract, versicherungsart: e.target.value })}
+              className="border border-gray-300 p-2 rounded"
+              placeholder="Versicherungsart"
+            />
+            <input
+              type="text"
+              value={editingContract.vsnr}
+              onChange={e => setEditingContract({ ...editingContract, vsnr: e.target.value })}
+              className="border border-gray-300 p-2 rounded"
+              placeholder="VSNR"
+            />
+            <input
+              type="text"
+              value={editingContract.beitrag}
+              onChange={e => setEditingContract({ ...editingContract, beitrag: e.target.value })}
+              className="border border-gray-300 p-2 rounded"
+              placeholder="Beitrag"
+            />
+            <input
+              type="text"
+              value={editingContract.datenaktualisierung}
+              onChange={e => setEditingContract({ ...editingContract, datenaktualisierung: e.target.value })}
+              className="border border-gray-300 p-2 rounded"
+              placeholder="Datenaktualisierung"
+            />
+            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">Speichern</button>
+          </form>
+        )}
+    
         {/* Formular zum Hinzufügen eines neuen Vertrags */}
         <div className="border-t pt-4">
           <h4 className="text-lg font-semibold mb-4">Neuen Vertrag hinzufügen</h4>
@@ -772,65 +677,32 @@ const handleAddContract = (e: FormEvent) => {
         </div>
       </Dialog>
 
-   {/* Suche und Kacheln "Neue Versicherungen finden" */}
-<section>
-  <h2 className="text-xl font-semibold mb-4">Jetzt neue Versicherungen finden</h2>
+      {/* Suche und Kacheln "Neue Versicherungen finden" */}
+      
+    
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {filteredFields.length === 0 && (
+          <div className="text-gray-500 italic">Keine passenden Kategorien oder Produkte gefunden.</div>
+        )}
+        {filteredFields.map(([feld]) => (
+          <button
+            key={feld}
+            onClick={() => setSelectedField(feld)}
+            className="text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
+          >
+            <div className="flex items-center gap-2 font-medium">
+              {icons[feld]}
+              {feld}
+            </div>
+            <div className="text-sm text-gray-600">
+              {highlightMatch(beschreibungen[feld], searchQuery)}
+            </div>
+          </button>
+        ))}
+      </div>
 
-  <div className="relative mb-6">
-    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-    <input
-      type="text"
-      placeholder="Suche nach Versicherung oder Thema..."
-      value={searchQuery}
-      onChange={(e) => setSearchQuery(e.target.value)}
-      className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
-    />
-    {searchQuery && (
-      <button
-        onClick={() => setSearchQuery("")}
-        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-        aria-label="Suchfeld leeren"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    )}
-  </div>
-
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {filteredFields.length === 0 && (
-      <div className="text-gray-500 italic">Keine passenden Kategorien oder Produkte gefunden.</div>
-    )}
-    {filteredFields.map(([feld]) => (
-      <button
-        key={feld}
-        onClick={() => setSelectedField(feld)}
-        className="text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
-      >
-        <div className="flex items-center gap-2 font-medium">
-          {icons[feld]}
-          {feld}
-        </div>
-        <div className="text-sm text-gray-600">
-          {highlightMatch(beschreibungen[feld], searchQuery)}
-        </div>
-      </button>
-    ))}
-  </div>
-</section>
-
-<section>
-  <h2 className="text-xl font-semibold mb-4">Persönlicher Bedarfscheck</h2>
-  <button
-    onClick={() => setShowAnalysisModal(true)}
-    className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg border border-gray-200 transition text-left w-full"
-  >
-    <div className="flex items-center gap-3">
-      <HelpCircle className="w-5 h-5 text-red-500" />
-      <h3 className="font-semibold">Bedarfsanalyse starten</h3>
-    </div>
-  </button>
-</section>
-
+      {/* Persönlicher Bedarfscheck */}
+      
 
       {/* Dialog-Modal für ausgewähltes Versicherungsfeld */}
       <Dialog open={!!selectedField} onClose={() => setSelectedField(null)}>
@@ -855,37 +727,37 @@ const handleAddContract = (e: FormEvent) => {
       {/* Drawer (Sheet) für detaillierte Produktbeschreibung */}
       <Sheet open={!!selectedProduct} onClose={() => setSelectedProduct(null)}>
         {selectedProduct && (
-          <div className="space-y-4 text-sm text-gray-700">
-            <h4 className="text-xl font-semibold">{selectedProduct}</h4>
-            <p className="whitespace-pre-wrap leading-relaxed">
-              {tooltipTexte[selectedProduct]}
-            </p>
-            <div className="mt-4">
-              <strong>Wichtige Leistungskriterien:</strong>
-              {kriterien[selectedProduct] ? (
-                <ul className="list-disc ml-5 mt-1">
-                  {kriterien[selectedProduct].map((punkt, index) => (
-                    <li key={index} className="text-sm">
-                      {punkt}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="text-sm">Keine weiteren Kriterien verfügbar.</div>
-              )}
+          <>
+            <div className="space-y-4 text-sm text-gray-700">
+              <h4 className="text-xl font-semibold">{selectedProduct}</h4>
+              <p className="whitespace-pre-wrap leading-relaxed">
+                {tooltipTexte[selectedProduct]}
+              </p>
+              <div className="mt-4">
+                <strong>Wichtige Leistungskriterien:</strong>
+                {kriterien[selectedProduct] ? (
+                  <ul className="list-disc ml-5 mt-1">
+                    {kriterien[selectedProduct].map((punkt, index) => (
+                      <li key={index} className="text-sm">
+                        {punkt}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm">Keine weiteren Kriterien verfügbar.</div>
+                )}
+              </div>
+              <div className="text-sm">
+                <strong>Vergleich:</strong>{" "}
+                <a
+                  onClick={() => handleOpenComparisonModal(selectedProduct || "")}
+                  className="text-sm text-blue-600 hover:underline cursor-pointer"
+                >
+                  Zum Vergleichsrechner
+                </a>
+              </div>
             </div>
-            <div className="text-sm">
-              <strong>Vergleich:</strong>{" "}
-              <a
-                href="/vergleichsrechner"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:underline"
-              >
-                Zum Vergleichsrechner
-              </a>
-            </div>
-          </div>
+          </>
         )}
       </Sheet>
 
@@ -912,6 +784,366 @@ const handleAddContract = (e: FormEvent) => {
           </div>
         </button>
       </section>
+    <div>
+        <section>
+            <h2 className="text-xl font-semibold mb-4">Jetzt neue Versicherungen finden</h2>
+        </section>
+        <div className="relative mb-6">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+                type="text"
+                placeholder="Suche nach Versicherung oder Thema..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
+            />
+        </div>
+        <section>
+            <h2 className="text-xl font-semibold mb-4">Persönlicher Bedarfscheck</h2>
+            <button
+                onClick={() => setShowAnalysisModal(true)}
+                className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg border border-gray-200 transition text-left w-full"
+            >
+                <div className="flex items-center gap-3">
+                    <HelpCircle className="w-5 h-5 text-red-500" />
+                    <h3 className="font-semibold">Bedarfsanalyse starten</h3>
+                </div>
+            </button>
+        </section>
+    </div>
+    </>
+  );
+  
+{/* Vergleichsrechner Modal */}
+{showComparisonModal && (
+  <div className="fixed inset-0 bg-black/70 z-[100] flex justify-center items-center">
+    <div className="relative w-full max-w-6xl h-full sm:h-[80vh] bg-white rounded-xl shadow-xl overflow-hidden">
+      <button
+        onClick={() => setShowComparisonModal(false)}
+        className="absolute top-4 right-4 text-white text-lg z-50"
+      >
+        ❌ Schließen
+      </button>
+      
+      <iframe
+        src="path/to/your/image/or/comparison.png"
+        className="w-full h-full"
+        title="Vergleichsrechner"
+        style={{ display: "block" }}
+      />
+    </div>
+  </div>
+)}
+
+useEffect(() => {
+  console.log("showComparisonModal state change:", showComparisonModal);
+}, [showComparisonModal]);
+
+  // 🟢 Vertragsbearbeitung starten
+const handleEdit = (contract: Contract) => {
+  setEditingContract({ ...contract }); // Vertrag wird zur Bearbeitung gesetzt
+};
+
+// 🟢 Vertragsbearbeitung speichern
+const handleSaveEdit = (e: FormEvent) => {
+  e.preventDefault();
+  if (editingContract) {
+    const updatedContracts = contracts.map(contract =>
+      contract.id === editingContract.id ? editingContract : contract
+    );
+    setContracts(updatedContracts);
+    localStorage.setItem("contracts", JSON.stringify(updatedContracts)); // Speichern in localStorage
+    setEditingContract(null); // Bearbeitungsmodus beenden
+  }
+};
+
+// 🟢 Vertrag löschen
+const handleDelete = (id: string) => {
+  const updatedContracts = contracts.filter(contract => contract.id !== id);
+  setContracts(updatedContracts);
+  localStorage.setItem("contracts", JSON.stringify(updatedContracts)); // Speichern in localStorage
+};
+
+  const questions = [
+    "Hast du Kinder oder planst du in nächster Zeit Nachwuchs?",
+    "Besitzt du ein eigenes Haus oder eine Eigentumswohnung?",
+    "Hast du ein oder mehrere Haustiere?",
+    "Bist du selbstständig oder freiberuflich tätig?",
+    "Hast du ein eigenes Auto, das du regelmäßig nutzt?",
+    "Willst du für das Alter privat vorsorgen?",
+    "Möchtest du deine Familie im Todesfall absichern?",
+  ];
+  
+  const gewichtLabels: Record<number, string> = {
+    5: "Pflicht",
+    4: "sehr wichtig",
+    3: "wichtig",
+    2: "weniger wichtig",
+    1: "bedingt wichtig",
+  };
+
+  const recommendations: Record<number, { produkt: string; gewichtung: number }[]> = {
+    0: [{ produkt: "Kinderspezialtarife", gewichtung: 4 }],
+    1: [
+      { produkt: "Wohngebäude", gewichtung: 5 },
+      { produkt: "Hausrat", gewichtung: 4 },
+    ],
+    2: [
+      { produkt: "Tierhalterhaftpflicht", gewichtung: 5 },
+      { produkt: "Tierkrankenversicherung", gewichtung: 3 },
+    ],
+    3: [
+      { produkt: "Berufsunfähigkeit", gewichtung: 5 },
+      { produkt: "Basis-Rente", gewichtung: 3 },
+      { produkt: "Private Rente", gewichtung: 2 },
+    ],
+    4: [{ produkt: "Kfz-Versicherung", gewichtung: 5 }],
+    5: [
+      { produkt: "Riester-Rente", gewichtung: 4 },
+      { produkt: "Private Rente", gewichtung: 3 },
+    ],
+    6: [
+      { produkt: "Risikolebensversicherung", gewichtung: 5 },
+      { produkt: "Sterbegeldversicherung", gewichtung: 2 },
+    ],
+  };
+  
+  const gewichteteEmpfehlungen: Record<string, number> = {};
+  Object.entries(answers).forEach(([frageIndex, antwort]) => {
+    if (antwort === "ja") {
+      const empfohlene = recommendations[parseInt(frageIndex)];
+      empfohlene?.forEach(({ produkt, gewichtung }) => {
+        gewichteteEmpfehlungen[produkt] = (gewichteteEmpfehlungen[produkt] || 0) + gewichtung;
+      });
+    }
+  });
+  
+  const resultProducts = Object.entries(gewichteteEmpfehlungen)
+    .sort((a, b) => b[1] - a[1])
+    .map(([produkt, gewichtung]) => ({ produkt, gewichtung }));
+    
+  const recommendedProducts = resultProducts.map(({ produkt }) => produkt);
+  
+  const circleColors: Record<string, string> = {
+    red: "bg-red-500",
+    yellow: "bg-yellow-400",
+    green: "bg-green-500",
+  };
+    
+  const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
+  const [showContractsModal, setShowContractsModal] = useState(false);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [contracts, setContracts] = useState<Contract[]>(initialContracts);
+  const saveRecommendationsToContracts = (newRecommendations: string[]) => {
+    const updatedContracts = contracts.map(contract => {
+        // Falls ein Vertrag bereits existiert und im empfohlenen Produkt vorkommt, setze den Status auf "empfohlen"
+        if (newRecommendations.includes(contract.versicherungsart)) {
+            return { ...contract, status: "empfohlen" };
+        }
+        return contract; // Andernfalls, Vertrag unverändert lassen
+    });
+
+    const newContracts = newRecommendations
+        .filter(product => !contracts.some(contract => contract.versicherungsart === product))
+        .map(product => ({
+            status: "empfohlen",
+            versicherer: "Empfohlen",
+            versicherungsart: product,
+            vsnr: "-", // Leeres Feld, wenn keine Daten vorhanden
+            beitrag: "-", // Leeres Feld, wenn keine Daten vorhanden
+            datenaktualisierung: "-" // Leeres Feld, wenn keine Daten vorhanden
+        }));
+
+    setContracts([...updatedContracts, ...newContracts]);
+  };
+
+
+  // Speichere die empfohlenen Produkte im Ordner
+  useEffect(() => {
+    if (recommendedProducts.length > 0) {
+        saveRecommendationsToContracts(recommendedProducts);
+    }
+  }, [recommendedProducts.length]);  // Nur auf Länge prüfen, nicht auf gesamten Inhalt
+
+  useEffect(() => {
+    localStorage.setItem("contracts", JSON.stringify(contracts));
+  }, [contracts]);
+  
+  // Kombiniere empfohlene Produkte mit bestehenden Verträgen
+const combinedContracts = recommendedProducts.map(produkt => {
+  const existingContract = contracts.find(contract => contract.versicherungsart === produkt);
+  if (existingContract) {
+      return { ...existingContract, status: "empfohlen" }; // Vertrag aktualisieren und als "empfohlen" markieren
+  }
+  return { 
+      status: "empfohlen", 
+      versicherer: "",  // Leer lassen, weil kein Vertrag existiert
+      versicherungsart: produkt, 
+      vsnr: "-", 
+      beitrag: "-", 
+      datenaktualisierung: "-" 
+  };
+});
+
+// Füge bestehende Verträge hinzu, die keine Empfehlungen sind
+const nonRecommendedContracts = contracts.filter(contract =>
+  !recommendedProducts.includes(contract.versicherungsart)
+);
+
+const finalContracts = [...combinedContracts, ...nonRecommendedContracts];
+
+
+  // Dynamisch generierte Liste aller vorhandenen Versicherungsarten im Ordner
+  const existingInsurances = contracts.map(contract => contract.versicherungsart).filter(Boolean);
+
+  // Jetzt kannst du das Set erstellen
+  const existingInsurancesSet = new Set(existingInsurances);
+
+  const matchingProducts = recommendedProducts.filter(produkt => existingInsurancesSet.has(produkt));
+
+  // Überprüfen, welche empfohlenen Versicherungen vorhanden sind
+  const allProductsPresent = matchingProducts.length === recommendedProducts.length;
+
+  // Ampelstatus basierend auf vorhandenen Versicherungen und Empfehlungen
+  const allRecommendedProducts = resultProducts.map(({ produkt }) => produkt);
+  const matchedProducts = recommendedProducts.filter(produkt => existingInsurancesSet.has(produkt));
+
+  const statusAmpel = [
+    !Object.keys(answers).length && { color: "red", text: "Bedarfscheck fehlt" },
+    Object.keys(answers).length > 0 && matchedProducts.length === 0 && { color: "red", text: "Kein empfohlenes Produkt vorhanden" },
+    matchedProducts.length > 0 && matchedProducts.length < recommendedProducts.length && { color: "yellow", text: "Teilempfehlungen erfüllt" },
+    matchedProducts.length === recommendedProducts.length && { color: "green", text: "Alle Empfehlungen erfüllt" },
+  ].filter(Boolean) as { color: string; text: string }[];
+
+  // Zustände für das Formular zum Hinzufügen eines neuen Vertrags
+  const [newVersicherer, setNewVersicherer] = useState("");
+  const [newVersicherungsart, setNewVersicherungsart] = useState("");
+  const [newVsnr, setNewVsnr] = useState("");
+  const [newBeitrag, setNewBeitrag] = useState("");
+  const [newDatenaktualisierung, setNewDatenaktualisierung] = useState("");
+
+  const filteredFields = Object.entries(versicherungen).filter(([feld, produkte]) => {
+    const feldMatch = feld.toLowerCase().includes(searchQuery.toLowerCase());
+    const beschreibungMatch = beschreibungen[feld]?.toLowerCase().includes(searchQuery.toLowerCase());
+  
+    const produktMatch = produkte.some((produkt) => {
+      const produktTitelMatch = produkt.toLowerCase().includes(searchQuery.toLowerCase());
+      const produktBeschreibungMatch = beschreibungen[produkt]?.toLowerCase().includes(searchQuery.toLowerCase());
+      return produktTitelMatch || produktBeschreibungMatch;
+    });
+  
+    return feldMatch || beschreibungMatch || produktMatch;
+  });  
+
+  const handleAddContract = (e: FormEvent) => {
+    e.preventDefault();
+    const newContract: Contract = {
+      id: String(Date.now()), // Generiere eindeutige ID
+      status: recommendedProducts.includes(newVersicherungsart) ? "empfohlen" : "none",
+      versicherer: newVersicherer,
+      versicherungsart: newVersicherungsart,
+      vsnr: newVsnr || "-",
+      beitrag: newBeitrag || "-",
+      datenaktualisierung: newDatenaktualisierung || "-",
+    };
+    const updatedContracts = [...contracts, newContract];
+    setContracts(updatedContracts);
+    localStorage.setItem("contracts", JSON.stringify(updatedContracts)); // Speichern im localStorage
+  
+    // Felder leeren nach dem Hinzufügen
+    setNewVersicherer("");
+    setNewVersicherungsart("");
+    setNewVsnr("");
+    setNewBeitrag("");
+    setNewDatenaktualisierung("");
+  };
+
+  
+  const highlightMatch = (text: string, query: string): JSX.Element | string => {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return (
+      <>
+        {parts.map((part, i) =>
+          part.toLowerCase() === query.toLowerCase() ? (
+            <mark key={i} className="bg-yellow-200">{part}</mark>
+          ) : (
+            part
+          )
+        )}
+      </>
+    );
+  };
+
+
+  return (
+    <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-10">
+  
+      {/* Vergleichsbild-Modal */}
+      <ComparisonImageModal
+        open={showComparisonImageModal}
+        onClose={() => setShowComparisonImageModal(false)}
+        imageUrl={comparisonImage}
+      />
+  
+      {/* Vergleichsrechner Modal */}
+      {showComparisonModal && (
+        <div className="fixed inset-0 bg-black/70 z-[100] flex justify-center items-center">
+          <div className="relative w-full max-w-6xl h-full sm:h-[80vh] bg-white rounded-xl shadow-xl overflow-hidden">
+            <button
+              onClick={() => setShowComparisonModal(false)}
+              className="absolute top-4 right-4 text-white text-lg z-50"
+            >
+              ❌ Schließen
+            </button>
+            <iframe
+              src="path/to/your/image/or/comparison.png"
+              className="w-full h-full"
+              title="Vergleichsrechner"
+              style={{ display: "block" }}
+            />
+          </div>
+        </div>
+      )}
+  
+      {/* Dialog-Komponente für Vertragsliste */}
+      <Dialog open={showContractsModal} onClose={() => setShowContractsModal(false)}>
+        <div className="mb-6">
+          <h3 className="text-xl font-semibold">Bestehende Verträge</h3>
+        </div>
+        <table className="table-auto w-full border-collapse text-sm mb-6">
+          <thead className="bg-gray-100">
+            <tr>
+              <th>Status</th>
+              <th>Versicherer</th>
+              <th>Versicherungsart</th>
+              <th>VSNR</th>
+              <th>Beitrag</th>
+              <th>Datenaktualisierung</th>
+              <th>Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {contracts.map((contract, index) => (
+              <tr key={contract.id || index} className="border-b">
+                <td>{contract.status === "none" ? "" : contract.status}</td>
+                <td>{contract.versicherer}</td>
+                <td>{contract.versicherungsart}</td>
+                <td>{contract.vsnr || "-"}</td>
+                <td>{contract.beitrag || "-"}</td>
+                <td>{contract.datenaktualisierung || "-"}</td>
+                <td>
+                  <button onClick={() => handleEdit(contract)}>✏️</button>
+                  <button onClick={() => handleDelete(contract.id)}>🗑️</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Dialog>
+  
+      {/* Dialog für Bedarfsanalyse */}
       <Dialog
         open={showAnalysisModal}
         onClose={() => {
@@ -921,6 +1153,93 @@ const handleAddContract = (e: FormEvent) => {
         }}
       >
         {!showResults ? (
+            <div>  {/* <-- Hier ein div einfügen */}
+              {questions.map((q, idx) => (
+                <div key={idx} className="space-y-2">
+                  <p className="font-medium">{q}</p>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setAnswers({ ...answers, [idx]: "ja" })}
+                      className={`px-4 py-2 rounded-md ${
+                        answers[idx] === "ja" ? "bg-blue-600 text-white" : "bg-gray-100"
+                      }`}
+                    >
+                      Ja
+                    </button>
+                    <button
+                      onClick={() => setAnswers({ ...answers, [idx]: "nein" })}
+                      className={`px-4 py-2 rounded-md ${
+                        answers[idx] === "nein" ? "bg-blue-600 text-white" : "bg-gray-100"
+                      }`}
+                    >
+                      Nein
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div> , {/* <-- Schließendes div */}
+        ) : (
+          <div className="space-y-4">
+            <h3 className="text-xl font-semibold">Empfohlene Produkte</h3>
+            {resultProducts.length > 0 ? (
+              resultProducts.map(({ produkt, gewichtung }) => (
+                <button
+                  key={produkt}
+                  onClick={() => {
+                    setSelectedProduct(produkt);
+                    setShowAnalysisModal(false);
+                  }}
+                  className="w-full bg-gray-100 hover:bg-gray-200 rounded-lg p-3 text-left flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" /> {produkt}
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    Relevanz: {gewichtung}/5 – {gewichtLabels[gewichtung] || ""}
+                  </span>
+                </button>
+              ))
+            ) : (
+              <p className="text-gray-500 italic">Es konnten keine spezifischen Empfehlungen abgeleitet werden.</p>
+            )}
+          </div>
+        )}
+      </Dialog>
+    </div>
+  );    
+  
+
+  <>
+  {/* Großes Modal mit Vertragsliste und Formular */}
+  
+
+  {/* Suche und Kacheln "Neue Versicherungen finden" */}
+
+
+  {/* Persönlicher Bedarfscheck */}
+
+
+      {/* Dialog-Modal für ausgewähltes Versicherungsfeld */}
+      
+
+      {/* Drawer (Sheet) für detaillierte Produktbeschreibung */}
+      
+
+      {/* Anleitungen (Videoanleitungen) */}
+      
+
+
+
+      
+      <Dialog
+        open={showAnalysisModal}
+        onClose={() => {
+          setShowAnalysisModal(false);
+          setAnswers({});
+          setShowResults(false);
+        }}
+    
+        {...showResults ? (
           <div className="space-y-6">
             <h3 className="text-xl font-semibold">Fragen zur Lebenssituation</h3>
             {questions.map((q, idx) => (
@@ -985,8 +1304,4 @@ const handleAddContract = (e: FormEvent) => {
             )}
           </div>
         )}
-      </Dialog>
-
-    </div>
-  );
 }
