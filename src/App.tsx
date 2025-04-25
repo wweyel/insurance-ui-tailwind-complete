@@ -37,6 +37,7 @@ import {
   CheckCircle
 } from "lucide-react";
 
+<h1 style={{ color: 'green' }}>✅ NEUE VERSION DEPLOYED!</h1>
 
 // Typdefinition für einen Vertrag
 type Contract = {
