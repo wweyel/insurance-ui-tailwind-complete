@@ -1,12 +1,3 @@
-// Ganz oben in App.tsx:
-export default function App() {
-  return (
-    <div style={{ padding: "2rem", background: "#222", color: "#0f0" }}>
-      <h1>✅ Ich bin die neue LIVE-Version!</h1>
-    </div>
-  );
-}
-
 import React, { useState, FormEvent, useEffect } from "react";
 import { Dialog } from "./Dialog";
 import { Sheet } from "./Sheet";
@@ -500,6 +491,11 @@ return (
 
 //------------- START -----------------------------------------------
 export default function App() {
+  return (
+    <div style={{ padding: "2rem", background: "#222", color: "#0f0" }}>
+      <h1>✅ Ich bin die neue LIVE-Version!</h1>
+    </div>
+  );
 
   // ⚙️ Zustand (useState) und andere Hooks hier...
   const [showComparisonModal, setShowComparisonModal] = useState(false);
