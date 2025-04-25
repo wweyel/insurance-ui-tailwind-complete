@@ -1,3 +1,12 @@
+// Ganz oben in App.tsx:
+export default function App() {
+  return (
+    <div style={{ padding: "2rem", background: "#222", color: "#0f0" }}>
+      <h1>✅ Ich bin die neue LIVE-Version!</h1>
+    </div>
+  );
+}
+
 import React, { useState, FormEvent, useEffect } from "react";
 import { Dialog } from "./Dialog";
 import { Sheet } from "./Sheet";
@@ -36,8 +45,6 @@ import {
   HelpCircle, // 👉 DAS MUSS HINZUGEFÜGT WERDEN
   CheckCircle
 } from "lucide-react";
-
-<h1 style={{ color: 'green' }}>✅ NEUE VERSION DEPLOYED!</h1>
 
 // Typdefinition für einen Vertrag
 type Contract = {
