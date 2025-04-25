@@ -693,7 +693,6 @@ export default function App() {
     alert("Empfohlene Produkte wurden erfolgreich übernommen!");
   };
 
-
   // Dynamisch generierte Liste aller vorhandenen Versicherungsarten im Ordner
   const existingInsurances = contracts.map(contract => contract.versicherungsart).filter(Boolean);
 
