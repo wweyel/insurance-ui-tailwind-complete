@@ -3,6 +3,8 @@ import { Dialog } from "./Dialog";
 import { Sheet } from "./Sheet";
 import { Tab } from '@headlessui/react';
 import { toast, Toaster } from 'react-hot-toast';
+import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts';
+import { useSpring, animated } from '@react-spring/web';
 import {
   ShieldCheck,
   PawPrint,
@@ -77,8 +79,8 @@ const initialContracts: Contract[] = savedContracts ? JSON.parse(savedContracts)
     status: "none",
     versicherer: "AdmiralDirekt.de",
     versicherungsart: "Kfz-Versicherung",
-    vsnr: " - ",
-    beitrag: " - ",
+    vsnr: "345397",
+    beitrag: " 555,00 ",
     datenaktualisierung: " - ",
   },
   {
@@ -86,7 +88,7 @@ const initialContracts: Contract[] = savedContracts ? JSON.parse(savedContracts)
     status: "none",
     versicherer: "Gothaer Allgemeine Versicherung AG",
     versicherungsart: "Privathaftpflicht",
-    vsnr: " - ",
+    vsnr: "9876543",
     beitrag: "64,66 €",
     datenaktualisierung: " Ja ",
   },
@@ -492,6 +494,64 @@ return (
 );
 };
 
+const GaugeChart = ({ percentage, totalProducts, coveredProducts }: { percentage: number; totalProducts: number; coveredProducts: number; }) => {
+  const { animatedValue } = useSpring({
+    from: { animatedValue: 0 },
+    to: { animatedValue: percentage },
+    config: { duration: 1000 },
+  });
+
+  const text = totalProducts === 0
+    ? "Keine Empfehlungen vorhanden."
+    : `${coveredProducts} von ${totalProducts} empfohlenen Produkt${totalProducts > 1 ? 'en' : ''} ${coveredProducts === 1 ? 'ist' : 'sind'} abgedeckt.`;
+
+  return (
+    <div className="relative w-56 h-56 flex flex-col items-center justify-center">
+      {/* Tacho */}
+      <ResponsiveContainer width="100%" height="100%">
+        <RadialBarChart
+          cx="50%"
+          cy="50%"
+          innerRadius="70%"
+          outerRadius="100%"
+          startAngle={210}
+          endAngle={-30}
+          data={[{ name: "Absicherung", value: percentage }]}
+        >
+          <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+          <RadialBar
+            background
+            clockWise
+            dataKey="value"
+            cornerRadius={10}
+            fill={
+              percentage < 25 ? "#f87171" :
+              percentage < 50 ? "#fb923c" :
+              percentage < 75 ? "#facc15" :
+              "#4ade80"
+            }
+          />
+        </RadialBarChart>
+      </ResponsiveContainer>
+
+      {/* Prozentzahl */}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[70%] text-center">
+        <animated.div className="text-3xl font-bold leading-none">
+          {animatedValue.to((n) => `${Math.round(n)}%`)}
+        </animated.div>
+        <div className="text-xs text-gray-500">Deine Absicherung</div>
+      </div>
+
+      {/* Text direkt unter dem Tacho, ohne extra Abstand */}
+      <div className="absolute bottom-2 text-center text-sm text-gray-600">
+        {text}
+      </div>
+    </div>
+  );
+};
+
+
+
 //------------- START -----------------------------------------------
 export default function App() {
 
@@ -516,6 +576,18 @@ export default function App() {
   const [recommendedProducts, setRecommendedProducts] = useState<string[]>([]);
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [sortField, setSortField] = useState<string>("versicherer");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      // Wenn derselbe Feldname erneut geklickt wird, Richtung wechseln
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Neues Feld anklicken → Sortierung neu aufsteigend
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
   const formatCurrency = (value: string) => {
     const numericValue = parseFloat(value.replace(/[^\d,-]/g, '').replace(',', '.'));
     return isNaN(numericValue) ? "-" : numericValue.toLocaleString('de-DE', {
@@ -639,9 +711,10 @@ export default function App() {
   const handleAnswerChange = (questionIndex: number, value: string) => {
     setSelectedAnswers((prev) => ({ ...prev, [questionIndex]: value }));
   };
+
   const getRecommendations = () => {
     const gewichteteEmpfehlungen: Record<string, number> = {};
-
+  
     Object.entries(selectedAnswers).forEach(([frageIndex, antwort]) => {
       if (antwort === "ja") {
         const empfohlene = recommendations[parseInt(frageIndex)];
@@ -650,11 +723,11 @@ export default function App() {
         });
       }
     });
-
+  
     return Object.entries(gewichteteEmpfehlungen)
       .sort((a, b) => b[1] - a[1])
-      .map(([produkt, gewichtung]) => ({ produkt, gewichtung }));
-  };
+      .map(([produkt, gewichtung]) => ({ produkt, gewichtung })); // <-- neu!
+  };  
   
   const handleRecommendationClick = (produkt: string) => {
     setSelectedProduct(produkt);
@@ -667,6 +740,20 @@ export default function App() {
     gray: "bg-gray-300",
   };
     
+  const sortedContracts = [...contracts].sort((a, b) => {
+    if (!sortField) return 0;
+  
+    const fieldA = (a as any)[sortField] || "";
+    const fieldB = (b as any)[sortField] || "";
+  
+    if (typeof fieldA === "string" && typeof fieldB === "string") {
+      return sortDirection === "asc"
+        ? fieldA.localeCompare(fieldB)
+        : fieldB.localeCompare(fieldA);
+    }
+  
+    return 0;
+  });
   
   const saveRecommendationsToContracts = () => {
       const updatedContracts = contracts.map(contract => {
@@ -702,11 +789,13 @@ export default function App() {
       return "red"; // Wenn das Feld nicht existiert, Ampel einfach auf Rot
     }
   
-    const empfohleneProdukteImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
-    const vorhandeneProdukte = contracts.map(c => c.versicherungsart);
+    const recommendedProductsImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const vorhandeneProdukte = contracts
+      .filter(c => c.status !== "ehemalig")
+      .map(c => c.versicherungsart);
   
-    const bereitsAbgedeckt = empfohleneProdukteImFeld.filter(p => vorhandeneProdukte.includes(p));
-    const total = empfohleneProdukteImFeld.length;
+    const bereitsAbgedeckt = recommendedProductsImFeld.filter(p => vorhandeneProdukte.includes(p));
+    const total = recommendedProductsImFeld.length;
     const erfüllt = bereitsAbgedeckt.length;
   
     if (total === 0) return "gray"; // keine Empfehlungen => neutral anzeigen
@@ -719,9 +808,11 @@ export default function App() {
   };
 
   // Ampel mit Mouseover-Tooltip
-  const Ampel = ({ status }: { status: "red" | "yellow" | "green" }) => {
-    const tooltipText = "Ampellogik:\n\nRot = weniger als 25 % der empfohlenen Produkte\nGelb = 25–90 % erfüllt\nGrün = mehr als 90 % erfüllt";
-
+  const Ampel = ({ status, hasRecommendations }: { status: "red" | "yellow" | "green" | "gray"; hasRecommendations: boolean }) => {
+    const tooltipText = hasRecommendations
+      ? "Ampellogik:\n\nRot = weniger als 25% der empfohlenen Produkte\nGelb = 25–90% erfüllt\nGrün = mehr als 90% erfüllt"
+      : "Noch keine Empfehlungen – starte Deinen persönlichen Bedarfscheck!";
+  
     return (
       <div className="relative group flex flex-col items-center space-y-1 ml-4">
         <div className="flex flex-col space-y-1">
@@ -729,7 +820,6 @@ export default function App() {
           <div className={`w-3 h-3 rounded-full ${status === "yellow" ? "bg-yellow-400" : status === "gray" ? "bg-gray-300" : "bg-gray-300"}`} />
           <div className={`w-3 h-3 rounded-full ${status === "green" ? "bg-green-500" : status === "gray" ? "bg-gray-300" : "bg-gray-300"}`} />
         </div>
-        {/* Tooltip */}
         <div className="absolute top-0 left-10 hidden group-hover:flex flex-col bg-black text-white text-xs rounded-lg p-2 w-56 shadow-lg z-50">
           {tooltipText.split('\n').map((line, index) => (
             <span key={index} className="py-0.5">{line}</span>
@@ -745,15 +835,40 @@ export default function App() {
       return "Keine Empfehlungen vorhanden.";
     }
   
-    const empfohleneProdukteImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
-    const vorhandeneProdukte = contracts.map(c => c.versicherungsart);
+    const recommendedProductsImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const vorhandeneProdukte = contracts
+      .filter(c => c.status !== "ehemalig")
+      .map(c => c.versicherungsart);
   
-    const bereitsAbgedeckt = empfohleneProdukteImFeld.filter(p => vorhandeneProdukte.includes(p));
-    const total = empfohleneProdukteImFeld.length;
+    const bereitsAbgedeckt = recommendedProductsImFeld.filter(p => vorhandeneProdukte.includes(p));
+    const total = recommendedProductsImFeld.length;
     const erfüllt = bereitsAbgedeckt.length;
   
     if (total === 0) return "Keine Empfehlungen vorhanden.";
-    return `${erfüllt} von ${total} empfohlenen Produkten sind abgedeckt.`;
+  
+    const produktText = total === 1 ? "Produkt" : "Produkten";
+    const sindText = erfüllt === 1 ? "ist" : "sind";
+  
+    return `${erfüllt} von ${total} empfohlenen ${produktText} ${sindText} abgedeckt.`;
+  };
+  
+  
+
+  const calculateCoverageForField = (feld: string): number => {
+    const produkteInFeld = versicherungen[feld];
+    if (!produkteInFeld) return 0;
+  
+    const recommendedProductsImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const vorhandeneProdukte = contracts
+      .filter(c => c.status !== "ehemalig")
+      .map(c => c.versicherungsart);
+  
+    const bereitsAbgedeckt = recommendedProductsImFeld.filter(p => vorhandeneProdukte.includes(p));
+    const total = recommendedProductsImFeld.length;
+    const erfüllt = bereitsAbgedeckt.length;
+  
+    if (total === 0) return 0;
+    return Math.round((erfüllt / total) * 100); // Prozentwert, gerundet
   };
 
   // Im App-Body: neuer State für den Filter
@@ -835,6 +950,24 @@ export default function App() {
       </>
     );
   };
+
+  const isCovered = (produkt: string) => {
+    return contracts
+      .filter(c => c.status !== "ehemalig")
+      .some(c => c.versicherungsart === produkt);
+  };
+
+  const sortedRecommendedProducts = getRecommendations().sort((a, b) => {
+    if (sortField === 'gewichtung') {
+      return sortDirection === 'asc' ? a.gewichtung - b.gewichtung : b.gewichtung - a.gewichtung;
+    }
+    if (sortField === 'produkt') {
+      return sortDirection === 'asc'
+        ? a.produkt.localeCompare(b.produkt)
+        : b.produkt.localeCompare(a.produkt);
+    }
+    return 0;
+  });
 
   useEffect(() => {
     // dein useEffect hier...
@@ -993,20 +1126,39 @@ export default function App() {
             {/* Titel */}
             <h3 className="text-lg font-semibold mb-2">{selectedField}</h3>
 
-            {/* Ampel + Info-Text */}
-            <div className="flex items-center gap-4 mb-6">
-              <Ampel status={getAmpelStatusForField(selectedField!)} />
-              <span className="text-sm text-gray-600">
-                {getCoveredProductsInfo(selectedField!)}
-              </span>
+            {/* Neuer Tacho + Info-Text */}
+            <div className="flex flex-col items-center gap-2 mt-2 mb-8">
+              {selectedField && (() => {
+                const produkteInFeld = versicherungen[selectedField] || [];
+                const empfohleneProdukte = recommendedProducts.filter(p => produkteInFeld.includes(p));
+                const vorhandeneProdukte = contracts
+                  .filter(c => c.status !== "ehemalig") // 🛡️ Nur aktive Verträge zählen!
+                  .map(c => c.versicherungsart);
+
+                const abgedeckteProdukte = empfohleneProdukte.filter(p => vorhandeneProdukte.includes(p));
+                const totalEmpfohlene = empfohleneProdukte.length;
+                const totalAbgedeckt = abgedeckteProdukte.length;
+                const percentage = totalEmpfohlene === 0 ? 0 : Math.round((totalAbgedeckt / totalEmpfohlene) * 100);
+
+                return (
+                  <GaugeChart
+                    percentage={percentage}
+                    totalProducts={totalEmpfohlene}
+                    coveredProducts={totalAbgedeckt}
+                  />
+                );
+              })()}
             </div>
+
 
             {/* Produkte auflisten */}
             <div className="grid gap-3">
             {selectedField &&
               versicherungen[selectedField].map((produkt) => {
                 const isRecommended = recommendedProducts.includes(produkt);
-                const isCovered = contracts.some(contract => contract.versicherungsart === produkt);
+                const isCovered = contracts
+                  .filter(contract => contract.status !== "ehemalig") // 🛡️ Nur aktive Verträge berücksichtigen!
+                  .some(contract => contract.versicherungsart === produkt);
 
                 return (
                   <button
@@ -1053,12 +1205,13 @@ export default function App() {
 
             <Tab.Group>
               <Tab.List className="flex p-1 bg-gray-100 rounded-xl sticky top-[3.5rem] z-20 backdrop-blur-md mx-4 mt-4">
-                {['Bestehende Verträge', 'Empfohlene Produkte', 'Gespeicherte Angebote'].map((tab) => (
+                {['Bestehende Verträge', 'Empfohlene Produkte', 'Gespeicherte Angebote', 'Ehemalige Verträge'].map((tab) => (
                   <Tab
                     key={tab}
                     className={({ selected }) =>
                       `w-full py-2.5 text-sm font-medium leading-5 rounded-lg focus:outline-none transition ${
-                        selected ? 'bg-white shadow text-black' : 'text-gray-500 hover:bg-gray-200'}`
+                        selected ? 'bg-white shadow text-black' : 'text-gray-500 hover:bg-gray-200'
+                      }`
                     }
                   >
                     {tab}
@@ -1069,24 +1222,31 @@ export default function App() {
               <Tab.Panels className="mt-8 px-4 pb-6">
                 {/* Bestehende Verträge */}
                 <Tab.Panel className="space-y-3">
-                  <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-500 px-2">
-                    <div className="pl-[0.75rem]">Versicherer</div>
-                    <div className="pl-[0.25rem]">Versicherungsart</div>
-                    <div className="pl-[0.25rem]">VSNR</div>
-                    <div className="text-right">Beitrag p.a.</div>
-                    <div className="pl-[0.25rem]">Datenaktualisierung</div>
+                  <div className="grid grid-cols-12 gap-2 text-sm font-semibold text-gray-500 px-2">
+                    <div className="col-span-4 cursor-pointer" onClick={() => handleSort('versicherer')}>
+                      Versicherer {sortField === 'versicherer' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </div>
+
+                    <div className="col-span-4 cursor-pointer" onClick={() => handleSort('versicherungsart')}>
+                      Versicherungsart {sortField === 'versicherungsart' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </div>
+
+                    <div className="col-span-2 cursor-pointer" onClick={() => handleSort('vsnr')}>
+                      VSNR {sortField === 'vsnr' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </div>
+
+                    <div className="col-span-2 text-right cursor-pointer" onClick={() => handleSort('beitrag')}>
+                      Beitrag p.a. {sortField === 'beitrag' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </div>
                   </div>
 
-                  {contracts.map((contract) => (
+                  {sortedContracts.filter(c => c.status !== "ehemalig").map((contract) => (
                     <div key={contract.id} className="bg-white border border-gray-200 rounded-xl py-4 px-2 shadow-md">
-                      <div className="grid grid-cols-5 gap-4 items-center w-full text-sm text-gray-700 px-2">
-                        <div className="pl-[0.75rem]">{contract.versicherer}</div>
-                        <div className="pl-[0.25rem]">{contract.versicherungsart}</div>
-                        <div className="pl-[0.25rem]">{contract.vsnr}</div>
-                        <div className="text-right">{formatCurrency(contract.beitrag)}</div>
-                        <div className="pl-[0.25rem]">
-                          {contract.datenaktualisierung.trim() === "Ja" ? "✅" : <span className="text-red-500 font-bold">✖</span>}
-                        </div>
+                      <div className="grid grid-cols-12 gap-2 items-center text-sm text-gray-700 px-2">
+                        <div className="col-span-4 truncate">{contract.versicherer}</div>
+                        <div className="col-span-4 truncate">{contract.versicherungsart}</div>
+                        <div className="col-span-2 truncate">{contract.vsnr}</div>
+                        <div className="col-span-2 text-right">{formatCurrency(contract.beitrag)}</div>
                       </div>
                       <div className="flex gap-2 justify-end pr-4 mt-2">
                         <button onClick={() => handleEdit(contract)} className="text-yellow-500 hover:text-yellow-600">✏️</button>
@@ -1107,69 +1267,87 @@ export default function App() {
 
                 {/* Empfohlene Produkte */}
                 <Tab.Panel className="space-y-3">
-                  {/* Filter-Button */}
-                  {recommendedProducts.length > 0 && (
-                    <div className="flex items-center justify-end mb-4">
-                      <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={showOnlyMissing}
-                          onChange={() => setShowOnlyMissing(!showOnlyMissing)}
-                          className="rounded border-gray-300 focus:ring-blue-500"
-                        />
-                        Nur fehlende anzeigen
-                      </label>
-                    </div>
-                  )}
-
-                  {/* Tabellenüberschrift */}
-                  <div className="grid grid-cols-3 gap-4 text-sm font-semibold text-gray-500 px-2 mb-2">
-                    <div className="pl-[0.75rem]">Versicherungsart</div>
-                    <div>Empfohlen</div>
-                    <div className="text-center">Vertrag vorhanden</div>
+                  <div className="flex justify-end mb-4">
+                    <label className="flex items-center text-sm gap-2 text-gray-600">
+                      <input type="checkbox" className="rounded border-gray-300" checked={showOnlyMissing} onChange={() => setShowOnlyMissing(!showOnlyMissing)} />
+                      Nur fehlende anzeigen
+                    </label>
                   </div>
 
-                  {/* Inhalt */}
-                  {recommendedProducts.length ? (
-                    recommendedProducts
-                      .filter(produkt => {
-                        const isCovered = contracts.some(contract => contract.versicherungsart === produkt);
-                        return showOnlyMissing ? !isCovered : true;
-                      })
-                      .map((produkt) => {
-                        const isCovered = contracts.some(contract => contract.versicherungsart === produkt);
+                  {/* Spaltenüberschriften */}
+                  <div className="grid grid-cols-8 gap-2 text-sm font-semibold text-gray-500 px-2 mb-2">
+                    <div className="col-span-4 pl-2 cursor-pointer flex items-center gap-1" onClick={() => handleSort('produkt')}>
+                      Versicherungsart {sortField === 'produkt' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </div>
+                    <div className="col-span-2 text-center cursor-pointer flex items-center gap-1 justify-center" onClick={() => handleSort('wichtigeit')}>
+                      Wichtigkeit {sortField === 'wichtigeit' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </div>
+                    <div className="col-span-2 text-center">Vertrag vorhanden</div>
+                  </div>
 
-                        return (
-                          <div key={produkt} className="bg-white border border-gray-200 rounded-xl py-3 px-2 shadow-md hover:bg-gray-50 transition">
-                            <div className="grid grid-cols-3 gap-4 items-center w-full text-sm text-gray-700 px-2">
-                              <div className="pl-[0.75rem]">{produkt}</div>
-                              <div>Ja</div>
-                              <div className="text-center">
-                                {isCovered ? (
-                                  <div className="group relative">
-                                    ✅
-                                    <div className="absolute bottom-full mb-1 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 w-max mx-auto z-10">
-                                      Vertrag vorhanden
-                                    </div>
-                                  </div>
-                                ) : (
-                                  "–"
-                                )}
-                              </div>
+                  {/* Empfehlungslisten */}
+                  {sortedRecommendedProducts.length > 0 ? (
+                    sortedRecommendedProducts
+                      .filter(({ produkt }) => !showOnlyMissing || !isCovered(produkt))
+                      .map(({ produkt, gewichtung }) => (
+                        <div key={produkt} className="relative">
+                          {selectedProduct === produkt && (
+                            <div className="absolute inset-0 bg-white opacity-40 rounded-xl z-10"></div>
+                          )}
+                          <div
+                            className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm relative z-0"
+                            onClick={() => { setSelectedProduct(produkt); setShowResultsModal(false); }}
+                          >
+                            <div className="grid grid-cols-8 gap-2 items-center text-sm text-gray-700">
+                              <div className="col-span-4 pl-2">{produkt}</div>
+                              <div className="col-span-2 text-center">{gewichtung}/5</div>
+                              <div className="col-span-2 text-center">{isCovered(produkt) ? '✅' : '–'}</div>
                             </div>
                           </div>
-                        );
-                      })
+                        </div>
+                      ))
                   ) : (
                     <div className="italic text-gray-500 px-2">Keine empfohlenen Produkte vorhanden.</div>
                   )}
                 </Tab.Panel>
 
                 {/* Gespeicherte Angebote */}
-                <Tab.Panel className="px-2">
-                  <div className="italic text-gray-500">
+                <Tab.Panel>
+                  <div className="italic text-gray-500 px-2">
                     Hier kannst du zukünftig gespeicherte Angebote ablegen, berechnen und verwalten.
                   </div>
+                </Tab.Panel>
+
+                {/* Ehemalige Verträge */}
+                <Tab.Panel className="space-y-3">
+                  {contracts.filter(c => c.status === "ehemalig").length === 0 ? (
+                    <div className="italic text-gray-500 px-2 mb-4">
+                      Hier erscheinen Verträge, die nicht mehr aktiv sind.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-12 gap-2 text-sm font-semibold text-gray-500 px-2">
+                        <div className="col-span-4">Versicherer</div>
+                        <div className="col-span-4">Versicherungsart</div>
+                        <div className="col-span-2">VSNR</div>
+                        <div className="col-span-2 text-right">Letzter Beitrag p.a.</div>
+                      </div>
+
+                      {sortedContracts.filter(c => c.status === "ehemalig").map((contract) => (
+                        <div key={contract.id} className="bg-white border border-gray-200 rounded-xl py-4 px-2 shadow-md">
+                          <div className="grid grid-cols-12 gap-2 items-center text-sm text-gray-700 px-2">
+                            <div className="col-span-4 truncate">{contract.versicherer}</div>
+                            <div className="col-span-4 truncate">{contract.versicherungsart}</div>
+                            <div className="col-span-2 truncate">{contract.vsnr}</div>
+                            <div className="col-span-2 text-right">{formatCurrency(contract.beitrag)}</div>
+                          </div>
+                          <div className="flex gap-2 justify-end pr-4 mt-2">
+                            <button onClick={() => handleDelete(contract.id)} className="text-gray-400 hover:text-red-500">🗑️</button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </Tab.Panel>
               </Tab.Panels>
             </Tab.Group>
@@ -1181,45 +1359,84 @@ export default function App() {
             <h3 className="text-xl font-semibold">Vertrag bearbeiten</h3>
             {editingContract && (
               <form onSubmit={handleSaveEdit} className="space-y-4">
-                <input
-                  type="text"
-                  value={editingContract.versicherer}
-                  onChange={(e) => setEditingContract({ ...editingContract, versicherer: e.target.value })}
-                  className="border border-gray-300 p-2 rounded w-full"
-                  placeholder="Versicherer"
-                />
-                <input
-                  type="text"
-                  value={editingContract.versicherungsart}
-                  onChange={(e) => setEditingContract({ ...editingContract, versicherungsart: e.target.value })}
-                  className="border border-gray-300 p-2 rounded w-full"
-                  placeholder="Versicherungsart"
-                />
-                <input
-                  type="text"
-                  value={editingContract.vsnr}
-                  onChange={(e) => setEditingContract({ ...editingContract, vsnr: e.target.value })}
-                  className="border border-gray-300 p-2 rounded w-full"
-                  placeholder="VSNR"
-                />
-                <input
-                  type="text"
-                  value={editingContract.beitrag}
-                  onChange={(e) => setEditingContract({ ...editingContract, beitrag: e.target.value })}
-                  className="border border-gray-300 p-2 rounded w-full"
-                  placeholder="Beitrag"
-                />
-                <input
-                  type="text"
-                  value={editingContract.datenaktualisierung}
-                  onChange={(e) => setEditingContract({ ...editingContract, datenaktualisierung: e.target.value })}
-                  className="border border-gray-300 p-2 rounded w-full"
-                  placeholder="Datenaktualisierung"
-                />
-                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">
-                  Änderungen speichern
-                </button>
-              </form>
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-600">Versicherer</label>
+                  <input
+                    type="text"
+                    value={editingContract.versicherer}
+                    onChange={(e) => setEditingContract({ ...editingContract, versicherer: e.target.value })}
+                    className="border border-gray-300 p-2 rounded w-full"
+                  />
+                </div>
+              
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-600">Versicherungsart</label>
+                  <input
+                    type="text"
+                    value={editingContract.versicherungsart}
+                    onChange={(e) => setEditingContract({ ...editingContract, versicherungsart: e.target.value })}
+                    className="border border-gray-300 p-2 rounded w-full"
+                  />
+                </div>
+              
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-600">VSNR</label>
+                  <input
+                    type="text"
+                    value={editingContract.vsnr}
+                    onChange={(e) => setEditingContract({ ...editingContract, vsnr: e.target.value })}
+                    className="border border-gray-300 p-2 rounded w-full"
+                  />
+                </div>
+              
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-600">Beitrag p.a.</label>
+                  <input
+                    type="text"
+                    value={editingContract.beitrag}
+                    onChange={(e) => setEditingContract({ ...editingContract, beitrag: e.target.value })}
+                    className="border border-gray-300 p-2 rounded w-full"
+                  />
+                </div>
+              
+                <div className="space-y-1">
+                  <label className="text-sm text-gray-600">Datenaktualisierung</label>
+                  <input
+                    type="text"
+                    value={editingContract.datenaktualisierung}
+                    onChange={(e) => setEditingContract({ ...editingContract, datenaktualisierung: e.target.value })}
+                    className="border border-gray-300 p-2 rounded w-full"
+                  />
+                </div>
+              
+                {/* Button-Reihe */}
+                <div className="flex justify-between items-center mt-4">
+                  <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">
+                    Änderungen speichern
+                  </button>
+              
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editingContract) {
+                        const updatedContracts = contracts.map(contract =>
+                          contract.id === editingContract.id
+                            ? { ...contract, status: "ehemalig" }
+                            : contract
+                        );
+                        setContracts(updatedContracts);
+                        localStorage.setItem("contracts", JSON.stringify(updatedContracts));
+                        setEditingContract(null);
+                        setShowEditModal(false);
+                        toast.success('Vertrag wurde zu "Ehemalige Verträge" verschoben.');
+                      }
+                    }}
+                    className="text-sm text-red-600 hover:underline"
+                  >
+                    Vertrag nicht mehr aktiv
+                  </button>
+                </div>
+              </form>            
             )}
           </div>
         </Dialog>
@@ -1370,14 +1587,22 @@ export default function App() {
               <h2 className="text-xl font-bold mb-4">Jetzt neue Versicherungen finden</h2>
           </section>
           <div className="relative mb-6">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Suche nach Versicherung oder Thema..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
-              />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Suche nach Versicherung oder Thema..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✖
+              </button>
+            )}
           </div>
         </div>
       
@@ -1404,7 +1629,7 @@ export default function App() {
                     {highlightMatch(beschreibungen[feld], searchQuery)}
                   </div>
                 </div>
-                <Ampel status={getAmpelStatusForField(feld)} />
+                <Ampel status={getAmpelStatusForField(feld)} hasRecommendations={recommendedProducts.length > 0} />
               </button>
             );
           })}
@@ -1491,9 +1716,17 @@ export default function App() {
               )}
 
               {showResultsModal && (
-                <Dialog open={showResultsModal} onClose={() => setShowResultsModal(false)}>
+                <Dialog open={showResultsModal} onClose={() => {
+                  setShowResultsModal(false);
+                  setShowBedarfscheckModal(false);
+                }}>
                   <div className="p-6">
                     <h2 className="text-xl font-semibold mb-4">Empfohlene Produkte</h2>
+                    {/* Ergänzung: Überschriften im Bedarfsanalyse-Ergebnis */}
+                    <div className="grid grid-cols-6 gap-2 text-sm font-semibold text-gray-500 px-2 mb-2 mt-6">
+                      <div className="col-span-4">Versicherungsart</div>
+                      <div className="col-span-2 text-center">Wichtigkeit</div>
+                    </div>
                     <ul className="space-y-2">
                       {getRecommendations().map(({ produkt, gewichtung }) => (
                         <li key={produkt}>
@@ -1518,7 +1751,10 @@ export default function App() {
                       </button>
 
                       <button
-                        onClick={() => setShowResultsModal(false)}
+                        onClick={() => {
+                          setShowResultsModal(false);
+                          setShowBedarfscheckModal(false);
+                        }}
                         className="text-sm text-blue-600 hover:underline"
                       >
                         Zurück zur Analyse

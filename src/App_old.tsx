@@ -2,6 +2,7 @@ import React, { useState, FormEvent, useEffect } from "react";
 import { Dialog } from "./Dialog";
 import { Sheet } from "./Sheet";
 import { Tab } from '@headlessui/react';
+import { toast, Toaster } from 'react-hot-toast';
 import {
   ShieldCheck,
   PawPrint,
@@ -34,7 +35,8 @@ import {
   X,
   Search,
   HelpCircle, // 👉 DAS MUSS HINZUGEFÜGT WERDEN
-  CheckCircle
+  CheckCircle,
+  Star
 } from "lucide-react";
 
 
@@ -662,6 +664,7 @@ export default function App() {
     red: "bg-red-500",
     yellow: "bg-yellow-400",
     green: "bg-green-500",
+    gray: "bg-gray-300",
   };
     
   
@@ -690,9 +693,71 @@ export default function App() {
   };
 
   const handleSaveRecommendations = () => {
-    alert("Empfohlene Produkte wurden erfolgreich übernommen!");
+    toast.success('Empfohlene Produkte wurden erfolgreich übernommen!');
   };
 
+  const getAmpelStatusForField = (feld: string): "red" | "yellow" | "green" => {
+    const produkteInFeld = versicherungen[feld];
+    if (!produkteInFeld) {
+      return "red"; // Wenn das Feld nicht existiert, Ampel einfach auf Rot
+    }
+  
+    const empfohleneProdukteImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const vorhandeneProdukte = contracts.map(c => c.versicherungsart);
+  
+    const bereitsAbgedeckt = empfohleneProdukteImFeld.filter(p => vorhandeneProdukte.includes(p));
+    const total = empfohleneProdukteImFeld.length;
+    const erfüllt = bereitsAbgedeckt.length;
+  
+    if (total === 0) return "gray"; // keine Empfehlungen => neutral anzeigen
+  
+    const quote = erfüllt / total;
+  
+    if (quote > 0.9) return "green";
+    if (quote < 0.25) return "red";
+    return "yellow";
+  };
+
+  // Ampel mit Mouseover-Tooltip
+  const Ampel = ({ status }: { status: "red" | "yellow" | "green" }) => {
+    const tooltipText = "Ampellogik:\n\nRot = weniger als 25 % der empfohlenen Produkte\nGelb = 25–90 % erfüllt\nGrün = mehr als 90 % erfüllt";
+
+    return (
+      <div className="relative group flex flex-col items-center space-y-1 ml-4">
+        <div className="flex flex-col space-y-1">
+          <div className={`w-3 h-3 rounded-full ${status === "red" ? "bg-red-500" : status === "gray" ? "bg-gray-300" : "bg-gray-300"}`} />
+          <div className={`w-3 h-3 rounded-full ${status === "yellow" ? "bg-yellow-400" : status === "gray" ? "bg-gray-300" : "bg-gray-300"}`} />
+          <div className={`w-3 h-3 rounded-full ${status === "green" ? "bg-green-500" : status === "gray" ? "bg-gray-300" : "bg-gray-300"}`} />
+        </div>
+        {/* Tooltip */}
+        <div className="absolute top-0 left-10 hidden group-hover:flex flex-col bg-black text-white text-xs rounded-lg p-2 w-56 shadow-lg z-50">
+          {tooltipText.split('\n').map((line, index) => (
+            <span key={index} className="py-0.5">{line}</span>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const getCoveredProductsInfo = (feld: string): string => {
+    const produkteInFeld = versicherungen[feld];
+    if (!produkteInFeld) {
+      return "Keine Empfehlungen vorhanden.";
+    }
+  
+    const empfohleneProdukteImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const vorhandeneProdukte = contracts.map(c => c.versicherungsart);
+  
+    const bereitsAbgedeckt = empfohleneProdukteImFeld.filter(p => vorhandeneProdukte.includes(p));
+    const total = empfohleneProdukteImFeld.length;
+    const erfüllt = bereitsAbgedeckt.length;
+  
+    if (total === 0) return "Keine Empfehlungen vorhanden.";
+    return `${erfüllt} von ${total} empfohlenen Produkten sind abgedeckt.`;
+  };
+
+  // Im App-Body: neuer State für den Filter
+  const [showOnlyMissing, setShowOnlyMissing] = useState(false);
 
   // Dynamisch generierte Liste aller vorhandenen Versicherungsarten im Ordner
   const existingInsurances = contracts.map(contract => contract.versicherungsart).filter(Boolean);
@@ -810,600 +875,684 @@ export default function App() {
   // Weitere Funktionen, useEffects, Konstanten hier...
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-10">
+    <>
+      <Toaster position="top-center" reverseOrder={false} />
+      <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-10">
 
-      {/* ALLE MODALS UND JSX Komponenten NUR EINMAL einfügen, KEINE doppelten Modals oder returns */}
+        {/* ALLE MODALS UND JSX Komponenten NUR EINMAL einfügen, KEINE doppelten Modals oder returns */}
 
-      {/* Großes Modal mit Vertragsliste und Formular */}
-      <Dialog open={showContractsModal} onClose={() => setShowContractsModal(false)}>
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold">Bestehende Verträge</h3>
-        </div>
-        <div className="space-y-4">
-          {contracts.map((contract) => (
-            <div
-              key={contract.id}
-              className="bg-white border border-gray-200 rounded-xl p-4 shadow-md flex justify-between items-center flex-wrap md:flex-nowrap"
-            >
-              <div className="grid grid-cols-5 gap-4 items-center w-full text-gray-700 text-sm">
-                <div>{contract.versicherer}</div>
-                <div className="flex items-center gap-2">
-                  {contract.versicherungsart}
-                  {contract.isRecommended && (
-                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Empfohlen</span>
+        {/* Großes Modal mit Vertragsliste und Formular */}
+        <Dialog open={showContractsModal} onClose={() => setShowContractsModal(false)}>
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold">Bestehende Verträge</h3>
+          </div>
+          <div className="space-y-4">
+            {contracts.map((contract) => (
+              <div
+                key={contract.id}
+                className="bg-white border border-gray-200 rounded-xl p-4 shadow-md flex justify-between items-center flex-wrap md:flex-nowrap"
+              >
+                <div className="grid grid-cols-5 gap-4 items-center w-full text-gray-700 text-sm">
+                  <div>{contract.versicherer}</div>
+                  <div className="flex items-center gap-2">
+                    {contract.versicherungsart}
+                    {contract.isRecommended && (
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Empfohlen</span>
+                    )}
+                  </div>
+                  <div>VSNR: {contract.vsnr || "-"}</div>
+                  <div className="text-right">
+                    Beitrag: {formatCurrency(contract.beitrag)}
+                  </div>
+                  <div>
+                    Datenaktualisierung: {contract.datenaktualisierung.trim() === "Ja" ? "✅" : "–"}
+                  </div>
+                </div>
+                <div className="flex gap-3 ml-4">
+                  {!contract.id.startsWith("recommended") && (
+                    <>
+                      <button
+                        onClick={() => handleEdit(contract)}
+                        className="text-yellow-500 hover:text-yellow-600"
+                        title="Bearbeiten"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => handleDelete(contract.id)}
+                        className="text-gray-400 hover:text-red-500"
+                        title="Löschen"
+                      >
+                        🗑️
+                      </button>
+                    </>
                   )}
                 </div>
-                <div>VSNR: {contract.vsnr || "-"}</div>
-                <div className="text-right">
-                  Beitrag: {formatCurrency(contract.beitrag)}
-                </div>
-                <div>
-                  Datenaktualisierung: {contract.datenaktualisierung.trim() === "Ja" ? "✅" : "–"}
-                </div>
               </div>
-              <div className="flex gap-3 ml-4">
-                {!contract.id.startsWith("recommended") && (
-                  <>
-                    <button
-                      onClick={() => handleEdit(contract)}
-                      className="text-yellow-500 hover:text-yellow-600"
-                      title="Bearbeiten"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => handleDelete(contract.id)}
-                      className="text-gray-400 hover:text-red-500"
-                      title="Löschen"
-                    >
-                      🗑️
-                    </button>
-                  </>
-                )}
-              </div>
+            ))}
+          </div>
+      
+        </Dialog>
+
+        <Dialog
+          open={showAnalysisModal}
+          onClose={() => {
+            setShowAnalysisModal(false);
+            setAnswers({});
+            setShowResults(false);
+          }}
+        >
+          <div className="p-6 space-y-6">
+            <h2 className="text-xl font-semibold">Bedarfsanalyse</h2>
+            <div className="space-y-4">
+              {questions.map((frage, index) => (
+                <div key={index} className="space-y-1">
+                  <p className="font-medium text-sm">{frage}</p>
+                  <div className="flex space-x-4 text-sm">
+                    <label>
+                      <input
+                        type="radio"
+                        name={`frage-${index}`}
+                        value="ja"
+                        checked={selectedAnswers[index] === "ja"}
+                        onChange={(e) => handleAnswerChange(index, e.target.value)}
+                      />{" "}
+                      Ja
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name={`frage-${index}`}
+                        value="nein"
+                        checked={selectedAnswers[index] === "nein"}
+                        onChange={(e) => handleAnswerChange(index, e.target.value)}
+                      />{" "}
+                      Nein
+                    </label>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-    
-      </Dialog>
 
-      <Dialog
-        open={showAnalysisModal}
-        onClose={() => {
-          setShowAnalysisModal(false);
-          setAnswers({});
-          setShowResults(false);
-        }}
-      >
-        <div className="p-6 space-y-6">
-          <h2 className="text-xl font-semibold">Bedarfsanalyse</h2>
-          <div className="space-y-4">
-            {questions.map((frage, index) => (
-              <div key={index} className="space-y-1">
-                <p className="font-medium text-sm">{frage}</p>
-                <div className="flex space-x-4 text-sm">
-                  <label>
-                    <input
-                      type="radio"
-                      name={`frage-${index}`}
-                      value="ja"
-                      checked={selectedAnswers[index] === "ja"}
-                      onChange={(e) => handleAnswerChange(index, e.target.value)}
-                    />{" "}
-                    Ja
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      name={`frage-${index}`}
-                      value="nein"
-                      checked={selectedAnswers[index] === "nein"}
-                      onChange={(e) => handleAnswerChange(index, e.target.value)}
-                    />{" "}
-                    Nein
-                  </label>
-                </div>
-              </div>
-            ))}
+            <div className="pt-4">
+              <h3 className="font-semibold text-sm mb-2">Empfohlene Produkte:</h3>
+              <ul className="list-disc list-inside text-sm">
+                {getRecommendations().map(({ produkt, gewichtung }) => (
+                  <li key={produkt}>
+                    {produkt} – {gewichtLabels[gewichtung]}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+        </Dialog>
 
-          <div className="pt-4">
-            <h3 className="font-semibold text-sm mb-2">Empfohlene Produkte:</h3>
-            <ul className="list-disc list-inside text-sm">
-              {getRecommendations().map(({ produkt, gewichtung }) => (
-                <li key={produkt}>
-                  {produkt} – {gewichtLabels[gewichtung]}
-                </li>
-              ))}
-            </ul>
+        {/* Dialog-Modal für ausgewähltes Versicherungsfeld */}
+        <Dialog open={!!selectedField} onClose={() => setSelectedField(null)}>
+          <div className="relative">
+            {/* Titel */}
+            <h3 className="text-lg font-semibold mb-2">{selectedField}</h3>
+
+            {/* Ampel + Info-Text */}
+            <div className="flex items-center gap-4 mb-6">
+              <Ampel status={getAmpelStatusForField(selectedField!)} />
+              <span className="text-sm text-gray-600">
+                {getCoveredProductsInfo(selectedField!)}
+              </span>
+            </div>
+
+            {/* Produkte auflisten */}
+            <div className="grid gap-3">
+            {selectedField &&
+              versicherungen[selectedField].map((produkt) => {
+                const isRecommended = recommendedProducts.includes(produkt);
+                const isCovered = contracts.some(contract => contract.versicherungsart === produkt);
+
+                return (
+                  <button
+                    key={produkt}
+                    onClick={() => setSelectedProduct(produkt)}
+                    className="bg-gray-50 p-3 rounded-xl text-left hover:bg-gray-100 transition flex justify-between items-center"
+                  >
+                    <div className="flex items-center gap-2 font-medium">
+                      {productIcons[produkt]}
+                      {/* Produktname */}
+                      {highlightMatch(produkt, searchQuery)}
+                      {/* Empfohlen-Icon direkt danach */}
+                      {isRecommended && (
+                        <div className="group relative text-yellow-400">
+                          <Star className="w-4 h-4" />
+                          <div className="absolute bottom-full mb-1 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 w-max mx-auto z-10">
+                            Empfohlenes Produkt
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Rechts außen: Vertrag vorhanden */}
+                    {isCovered && (
+                      <div className="group relative text-green-500">
+                        ✅
+                        <div className="absolute bottom-full mb-1 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 w-max mx-auto z-10">
+                          Vertrag vorhanden
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </Dialog>
+        </Dialog>
 
-      {/* Dialog-Modal für ausgewähltes Versicherungsfeld */}
-      <Dialog open={!!selectedField} onClose={() => setSelectedField(null)}>
-        <h3 className="text-lg font-semibold mb-4">{selectedField}</h3>
-        <div className="grid gap-3">
-          {selectedField &&
-            versicherungen[selectedField].map((produkt) => (
-              <button
-                key={produkt}
-                onClick={() => setSelectedProduct(produkt)}
-                className="bg-gray-50 p-3 rounded-xl text-left hover:bg-gray-100 transition"
-              >
-                <div className="flex items-center gap-2 font-medium">{productIcons[produkt]} {highlightMatch(produkt, searchQuery)}</div>
-                <div className="text-sm text-gray-600">
-                  {tooltipTexte[produkt].split("\n")[1] || tooltipTexte[produkt]}
-                </div>
-              </button>
-            ))}
-        </div>
-      </Dialog>
+        <Dialog open={showInsuranceFolder} onClose={() => setShowInsuranceFolder(false)}>
+          <div className="w-full max-w-7xl max-h-[80vh] overflow-auto relative mt-10">
+            <div className="flex justify-between items-start sticky top-0 bg-white z-30 px-4 pt-4">
+              <h3 className="text-xl font-semibold">Versicherungsordner</h3>
+            </div>
 
-      <Dialog open={showInsuranceFolder} onClose={() => setShowInsuranceFolder(false)}>
-        <div className="w-full max-w-7xl max-h-[80vh] overflow-auto relative mt-10">
-          <div className="flex justify-between items-start sticky top-0 bg-white z-30 px-4 pt-4">
-            <h3 className="text-xl font-semibold">Versicherungsordner</h3>
-            <button
-              className="text-blue-600 text-sm hover:underline flex items-center gap-1"
-              onClick={() => setShowInsuranceFolder(false)}
-            >
-              <span className="text-red-500 text-base font-bold">✖</span> Schließen
-            </button>
-          </div>
+            <Tab.Group>
+              <Tab.List className="flex p-1 bg-gray-100 rounded-xl sticky top-[3.5rem] z-20 backdrop-blur-md mx-4 mt-4">
+                {['Bestehende Verträge', 'Empfohlene Produkte', 'Gespeicherte Angebote'].map((tab) => (
+                  <Tab
+                    key={tab}
+                    className={({ selected }) =>
+                      `w-full py-2.5 text-sm font-medium leading-5 rounded-lg focus:outline-none transition ${
+                        selected ? 'bg-white shadow text-black' : 'text-gray-500 hover:bg-gray-200'}`
+                    }
+                  >
+                    {tab}
+                  </Tab>
+                ))}
+              </Tab.List>
 
-          <Tab.Group>
-            <Tab.List className="flex p-1 bg-gray-100 rounded-xl sticky top-[3.5rem] z-20 backdrop-blur-md mx-4 mt-4">
-              {['Bestehende Verträge', 'Empfohlene Produkte', 'Gespeicherte Angebote'].map((tab) => (
-                <Tab
-                  key={tab}
-                  className={({ selected }) =>
-                    `w-full py-2.5 text-sm font-medium leading-5 rounded-lg focus:outline-none transition ${
-                      selected ? 'bg-white shadow text-black' : 'text-gray-500 hover:bg-gray-200'}`
-                  }
-                >
-                  {tab}
-                </Tab>
-              ))}
-            </Tab.List>
+              <Tab.Panels className="mt-8 px-4 pb-6">
+                {/* Bestehende Verträge */}
+                <Tab.Panel className="space-y-3">
+                  <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-500 px-2">
+                    <div className="pl-[0.75rem]">Versicherer</div>
+                    <div className="pl-[0.25rem]">Versicherungsart</div>
+                    <div className="pl-[0.25rem]">VSNR</div>
+                    <div className="text-right">Beitrag p.a.</div>
+                    <div className="pl-[0.25rem]">Datenaktualisierung</div>
+                  </div>
 
-            <Tab.Panels className="mt-8 px-4 pb-6">
-              {/* Bestehende Verträge */}
-              <Tab.Panel className="space-y-3">
-                <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-500 px-2">
-                  <div className="pl-[0.75rem]">Versicherer</div>
-                  <div className="pl-[0.25rem]">Versicherungsart</div>
-                  <div className="pl-[0.25rem]">VSNR</div>
-                  <div className="text-right">Beitrag p.a.</div>
-                  <div className="pl-[0.25rem]">Datenaktualisierung</div>
-                </div>
-
-                {contracts.map((contract) => (
-                  <div key={contract.id} className="bg-white border border-gray-200 rounded-xl py-4 px-2 shadow-md">
-                    <div className="grid grid-cols-5 gap-4 items-center w-full text-sm text-gray-700 px-2">
-                      <div className="pl-[0.75rem]">{contract.versicherer}</div>
-                      <div className="pl-[0.25rem]">{contract.versicherungsart}</div>
-                      <div className="pl-[0.25rem]">{contract.vsnr}</div>
-                      <div className="text-right">{formatCurrency(contract.beitrag)}</div>
-                      <div className="pl-[0.25rem]">
-                        {contract.datenaktualisierung.trim() === "Ja" ? "✅" : <span className="text-red-500 font-bold">✖</span>}
+                  {contracts.map((contract) => (
+                    <div key={contract.id} className="bg-white border border-gray-200 rounded-xl py-4 px-2 shadow-md">
+                      <div className="grid grid-cols-5 gap-4 items-center w-full text-sm text-gray-700 px-2">
+                        <div className="pl-[0.75rem]">{contract.versicherer}</div>
+                        <div className="pl-[0.25rem]">{contract.versicherungsart}</div>
+                        <div className="pl-[0.25rem]">{contract.vsnr}</div>
+                        <div className="text-right">{formatCurrency(contract.beitrag)}</div>
+                        <div className="pl-[0.25rem]">
+                          {contract.datenaktualisierung.trim() === "Ja" ? "✅" : <span className="text-red-500 font-bold">✖</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end pr-4 mt-2">
+                        <button onClick={() => handleEdit(contract)} className="text-yellow-500 hover:text-yellow-600">✏️</button>
+                        <button onClick={() => handleDelete(contract.id)} className="text-gray-400 hover:text-red-500">🗑️</button>
                       </div>
                     </div>
-                    <div className="flex gap-2 justify-end pr-4 mt-2">
-                      <button onClick={() => handleEdit(contract)} className="text-yellow-500 hover:text-yellow-600">✏️</button>
-                      <button onClick={() => handleDelete(contract.id)} className="text-gray-400 hover:text-red-500">🗑️</button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
 
-                <div className="pt-4 px-2">
-                  <button
-                    onClick={() => setShowAddContractModal(true)}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    ➕ Vertrag hinzufügen
-                  </button>
-                </div>
-              </Tab.Panel>
-
-              {/* Empfohlene Produkte */}
-              <Tab.Panel className="space-y-3 px-2">
-                {recommendedProducts.length ? (
-                  recommendedProducts.map((produkt) => (
+                  <div className="pt-4 px-2">
                     <button
-                      key={produkt}
-                      onClick={() => setSelectedProduct(produkt)}
-                      className="flex justify-between items-center bg-gray-50 border border-gray-200 rounded-xl p-4 w-full hover:bg-gray-100 transition"
+                      onClick={() => setShowAddContractModal(true)}
+                      className="text-sm text-blue-600 hover:underline"
                     >
-                      <span className="font-medium">{produkt}</span>
-                      <span className="text-green-600 text-sm font-medium">Empfohlen</span>
+                      ➕ Vertrag hinzufügen
                     </button>
-                  ))
-                ) : (
-                  <div className="italic text-gray-500 px-2">Keine empfohlenen Produkte vorhanden.</div>
-                )}
-              </Tab.Panel>
+                  </div>
+                </Tab.Panel>
 
-              {/* Gespeicherte Angebote */}
-              <Tab.Panel className="px-2">
-                <div className="italic text-gray-500">
-                  Hier kannst du zukünftig gespeicherte Angebote ablegen, berechnen und verwalten.
-                </div>
-              </Tab.Panel>
-            </Tab.Panels>
-          </Tab.Group>
-        </div>
-      </Dialog>
+                {/* Empfohlene Produkte */}
+                <Tab.Panel className="space-y-3">
+                  {/* Filter-Button */}
+                  {recommendedProducts.length > 0 && (
+                    <div className="flex items-center justify-end mb-4">
+                      <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showOnlyMissing}
+                          onChange={() => setShowOnlyMissing(!showOnlyMissing)}
+                          className="rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        Nur fehlende anzeigen
+                      </label>
+                    </div>
+                  )}
 
-      <Dialog open={showEditModal} onClose={() => setShowEditModal(false)}>
-        <div className="p-6 space-y-4">
-          <h3 className="text-xl font-semibold">Vertrag bearbeiten</h3>
-          {editingContract && (
-            <form onSubmit={handleSaveEdit} className="space-y-4">
+                  {/* Tabellenüberschrift */}
+                  <div className="grid grid-cols-3 gap-4 text-sm font-semibold text-gray-500 px-2 mb-2">
+                    <div className="pl-[0.75rem]">Versicherungsart</div>
+                    <div>Empfohlen</div>
+                    <div className="text-center">Vertrag vorhanden</div>
+                  </div>
+
+                  {/* Inhalt */}
+                  {recommendedProducts.length ? (
+                    recommendedProducts
+                      .filter(produkt => {
+                        const isCovered = contracts.some(contract => contract.versicherungsart === produkt);
+                        return showOnlyMissing ? !isCovered : true;
+                      })
+                      .map((produkt) => {
+                        const isCovered = contracts.some(contract => contract.versicherungsart === produkt);
+
+                        return (
+                          <div key={produkt} className="bg-white border border-gray-200 rounded-xl py-3 px-2 shadow-md hover:bg-gray-50 transition">
+                            <div className="grid grid-cols-3 gap-4 items-center w-full text-sm text-gray-700 px-2">
+                              <div className="pl-[0.75rem]">{produkt}</div>
+                              <div>Ja</div>
+                              <div className="text-center">
+                                {isCovered ? (
+                                  <div className="group relative">
+                                    ✅
+                                    <div className="absolute bottom-full mb-1 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 w-max mx-auto z-10">
+                                      Vertrag vorhanden
+                                    </div>
+                                  </div>
+                                ) : (
+                                  "–"
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                  ) : (
+                    <div className="italic text-gray-500 px-2">Keine empfohlenen Produkte vorhanden.</div>
+                  )}
+                </Tab.Panel>
+
+                {/* Gespeicherte Angebote */}
+                <Tab.Panel className="px-2">
+                  <div className="italic text-gray-500">
+                    Hier kannst du zukünftig gespeicherte Angebote ablegen, berechnen und verwalten.
+                  </div>
+                </Tab.Panel>
+              </Tab.Panels>
+            </Tab.Group>
+          </div>
+        </Dialog>
+
+        <Dialog open={showEditModal} onClose={() => setShowEditModal(false)}>
+          <div className="p-6 space-y-4">
+            <h3 className="text-xl font-semibold">Vertrag bearbeiten</h3>
+            {editingContract && (
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <input
+                  type="text"
+                  value={editingContract.versicherer}
+                  onChange={(e) => setEditingContract({ ...editingContract, versicherer: e.target.value })}
+                  className="border border-gray-300 p-2 rounded w-full"
+                  placeholder="Versicherer"
+                />
+                <input
+                  type="text"
+                  value={editingContract.versicherungsart}
+                  onChange={(e) => setEditingContract({ ...editingContract, versicherungsart: e.target.value })}
+                  className="border border-gray-300 p-2 rounded w-full"
+                  placeholder="Versicherungsart"
+                />
+                <input
+                  type="text"
+                  value={editingContract.vsnr}
+                  onChange={(e) => setEditingContract({ ...editingContract, vsnr: e.target.value })}
+                  className="border border-gray-300 p-2 rounded w-full"
+                  placeholder="VSNR"
+                />
+                <input
+                  type="text"
+                  value={editingContract.beitrag}
+                  onChange={(e) => setEditingContract({ ...editingContract, beitrag: e.target.value })}
+                  className="border border-gray-300 p-2 rounded w-full"
+                  placeholder="Beitrag"
+                />
+                <input
+                  type="text"
+                  value={editingContract.datenaktualisierung}
+                  onChange={(e) => setEditingContract({ ...editingContract, datenaktualisierung: e.target.value })}
+                  className="border border-gray-300 p-2 rounded w-full"
+                  placeholder="Datenaktualisierung"
+                />
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">
+                  Änderungen speichern
+                </button>
+              </form>
+            )}
+          </div>
+        </Dialog>
+
+        <Dialog open={showAddContractModal} onClose={() => setShowAddContractModal(false)}>
+          <div className="p-6 space-y-4">
+            <h3 className="text-xl font-semibold">Neuen Vertrag hinzufügen</h3>
+            <form onSubmit={handleAddContract} className="space-y-4">
               <input
                 type="text"
-                value={editingContract.versicherer}
-                onChange={(e) => setEditingContract({ ...editingContract, versicherer: e.target.value })}
-                className="border border-gray-300 p-2 rounded w-full"
                 placeholder="Versicherer"
+                value={newVersicherer}
+                onChange={(e) => setNewVersicherer(e.target.value)}
+                className="border border-gray-300 p-2 rounded w-full"
+                required
               />
               <input
                 type="text"
-                value={editingContract.versicherungsart}
-                onChange={(e) => setEditingContract({ ...editingContract, versicherungsart: e.target.value })}
-                className="border border-gray-300 p-2 rounded w-full"
                 placeholder="Versicherungsart"
+                value={newVersicherungsart}
+                onChange={(e) => setNewVersicherungsart(e.target.value)}
+                className="border border-gray-300 p-2 rounded w-full"
+                required
               />
               <input
                 type="text"
-                value={editingContract.vsnr}
-                onChange={(e) => setEditingContract({ ...editingContract, vsnr: e.target.value })}
-                className="border border-gray-300 p-2 rounded w-full"
                 placeholder="VSNR"
+                value={newVsnr}
+                onChange={(e) => setNewVsnr(e.target.value)}
+                className="border border-gray-300 p-2 rounded w-full"
               />
               <input
                 type="text"
-                value={editingContract.beitrag}
-                onChange={(e) => setEditingContract({ ...editingContract, beitrag: e.target.value })}
-                className="border border-gray-300 p-2 rounded w-full"
                 placeholder="Beitrag"
+                value={newBeitrag}
+                onChange={(e) => setNewBeitrag(e.target.value)}
+                className="border border-gray-300 p-2 rounded w-full"
               />
               <input
                 type="text"
-                value={editingContract.datenaktualisierung}
-                onChange={(e) => setEditingContract({ ...editingContract, datenaktualisierung: e.target.value })}
-                className="border border-gray-300 p-2 rounded w-full"
                 placeholder="Datenaktualisierung"
+                value={newDatenaktualisierung}
+                onChange={(e) => setNewDatenaktualisierung(e.target.value)}
+                className="border border-gray-300 p-2 rounded w-full"
               />
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-md">
-                Änderungen speichern
-              </button>
-            </form>
-          )}
-        </div>
-      </Dialog>
-
-      <Dialog open={showAddContractModal} onClose={() => setShowAddContractModal(false)}>
-        <div className="p-6 space-y-4">
-          <h3 className="text-xl font-semibold">Neuen Vertrag hinzufügen</h3>
-          <form onSubmit={handleAddContract} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Versicherer"
-              value={newVersicherer}
-              onChange={(e) => setNewVersicherer(e.target.value)}
-              className="border border-gray-300 p-2 rounded w-full"
-              required
-            />
-            <input
-              type="text"
-              placeholder="Versicherungsart"
-              value={newVersicherungsart}
-              onChange={(e) => setNewVersicherungsart(e.target.value)}
-              className="border border-gray-300 p-2 rounded w-full"
-              required
-            />
-            <input
-              type="text"
-              placeholder="VSNR"
-              value={newVsnr}
-              onChange={(e) => setNewVsnr(e.target.value)}
-              className="border border-gray-300 p-2 rounded w-full"
-            />
-            <input
-              type="text"
-              placeholder="Beitrag"
-              value={newBeitrag}
-              onChange={(e) => setNewBeitrag(e.target.value)}
-              className="border border-gray-300 p-2 rounded w-full"
-            />
-            <input
-              type="text"
-              placeholder="Datenaktualisierung"
-              value={newDatenaktualisierung}
-              onChange={(e) => setNewDatenaktualisierung(e.target.value)}
-              className="border border-gray-300 p-2 rounded w-full"
-            />
-            <div className="flex justify-between">
-              <button
-                type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
-              >
-                Speichern
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddContractModal(false)}
-                className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition"
-              >
-                Abbrechen
-              </button>
-            </div>
-          </form>
-        </div>
-      </Dialog>
-
-
-      {/* Drawer (Sheet) für detaillierte Produktbeschreibung */}
-      <Sheet open={!!selectedProduct} onClose={() => setSelectedProduct(null)}>
-        {selectedProduct && (
-          <>
-            <div className="space-y-4 text-sm text-gray-700 p-6">
-              <h4 className="text-xl font-semibold">{selectedProduct}</h4>
-              <p className="whitespace-pre-wrap leading-relaxed">
-                {tooltipTexte[selectedProduct] || "Keine detaillierten Informationen verfügbar."}
-              </p>
-              <div className="mt-4">
-                <strong>Wichtige Leistungskriterien:</strong>
-                {kriterien[selectedProduct] ? (
-                  <ul className="list-disc ml-5 mt-1">
-                    {kriterien[selectedProduct].map((punkt, index) => (
-                      <li key={index} className="text-sm">
-                        {punkt}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-sm">Keine weiteren Kriterien verfügbar.</div>
-                )}
-              </div>
-              <div className="text-sm">
-                <strong>Vergleich:</strong>{" "}
-                <a
-                  onClick={() => handleOpenComparisonModal(selectedProduct || "")}
-                  className="text-sm text-blue-600 hover:underline cursor-pointer"
+              <div className="flex justify-between">
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
                 >
-                  Zum Vergleichsrechner
-                </a>
+                  Speichern
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddContractModal(false)}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition"
+                >
+                  Abbrechen
+                </button>
               </div>
+            </form>
+          </div>
+        </Dialog>
+
+
+        {/* Drawer (Sheet) für detaillierte Produktbeschreibung */}
+        <Sheet open={!!selectedProduct} onClose={() => setSelectedProduct(null)}>
+          {selectedProduct && (
+            <>
+              <div className="space-y-4 text-sm text-gray-700 p-6">
+                <h4 className="text-xl font-semibold">{selectedProduct}</h4>
+                <p className="whitespace-pre-wrap leading-relaxed">
+                  {tooltipTexte[selectedProduct] || "Keine detaillierten Informationen verfügbar."}
+                </p>
+                <div className="mt-4">
+                  <strong>Wichtige Leistungskriterien:</strong>
+                  {kriterien[selectedProduct] ? (
+                    <ul className="list-disc ml-5 mt-1">
+                      {kriterien[selectedProduct].map((punkt, index) => (
+                        <li key={index} className="text-sm">
+                          {punkt}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-sm">Keine weiteren Kriterien verfügbar.</div>
+                  )}
+                </div>
+                <div className="text-sm">
+                  <strong>Vergleich:</strong>{" "}
+                  <a
+                    onClick={() => handleOpenComparisonModal(selectedProduct || "")}
+                    className="text-sm text-blue-600 hover:underline cursor-pointer"
+                  >
+                    Zum Vergleichsrechner
+                  </a>
+                </div>
+              </div>
+            </>
+          )}
+        </Sheet>
+
+        {/* Der restliche JSX-Code sauber strukturiert hier einmalig */}
+
+        <ComparisonImageModal open={showComparisonImageModal} onClose={() => setShowComparisonImageModal(false)} imageUrl={comparisonImage} />
+
+      
+        {/* Vergleichsrechner Modal */}
+        {showComparisonModal && (
+          <div className="fixed inset-0 bg-black/70 z-[100] flex justify-center items-center">
+            <div className="relative w-full max-w-6xl h-full sm:h-[80vh] bg-white rounded-xl shadow-xl overflow-hidden">
+              <button
+                onClick={() => setShowComparisonModal(false)}
+                className="absolute top-4 right-4 text-white text-lg z-50"
+              >
+                ❌ Schließen
+              </button>
+              
+              <iframe
+                src="path/to/your/image/or/comparison.png"
+                className="w-full h-full"
+                title="Vergleichsrechner"
+                style={{ display: "block" }}
+              />
             </div>
-          </>
+          </div>
         )}
-      </Sheet>
 
-      {/* Der restliche JSX-Code sauber strukturiert hier einmalig */}
-
-      <ComparisonImageModal open={showComparisonImageModal} onClose={() => setShowComparisonImageModal(false)} imageUrl={comparisonImage} />
-
-    
-      {/* Vergleichsrechner Modal */}
-      {showComparisonModal && (
-        <div className="fixed inset-0 bg-black/70 z-[100] flex justify-center items-center">
-          <div className="relative w-full max-w-6xl h-full sm:h-[80vh] bg-white rounded-xl shadow-xl overflow-hidden">
-            <button
-              onClick={() => setShowComparisonModal(false)}
-              className="absolute top-4 right-4 text-white text-lg z-50"
-            >
-              ❌ Schließen
-            </button>
-            
-            <iframe
-              src="path/to/your/image/or/comparison.png"
-              className="w-full h-full"
-              title="Vergleichsrechner"
-              style={{ display: "block" }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Versicherungsordner Bereich */}
-      <div className="w-full mb-6">
-      <h2 className="text-xl font-bold mb-4">Meine Versicherungen</h2>
-        <button
-          onClick={() => setShowInsuranceFolder(true)}
-          className="text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
-        >
-          <div className="flex items-center gap-2 font-medium">
-            <Folder className="w-5 h-5 text-red-500" />
-            Versicherungsordner
-          </div>
-          <div className="text-sm text-gray-600">
-            Verwalte deine bestehenden Verträge und sieh dir empfohlene Produkte an.
-          </div>
-        </button>
-      </div>
-
-      <div>
-        <section>
-            <h2 className="text-xl font-bold mb-4">Jetzt neue Versicherungen finden</h2>
-        </section>
-        <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Suche nach Versicherung oder Thema..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
-            />
-        </div>
-      </div>
-    
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredFields.length === 0 && (
-          <div className="text-gray-500 italic">Keine passenden Kategorien oder Produkte gefunden.</div>
-        )}
-        {filteredFields.map(([feld]) => (
+        {/* Versicherungsordner Bereich */}
+        <div className="w-full mb-6">
+        <h2 className="text-xl font-bold mb-4">Meine Versicherungen</h2>
           <button
-            key={feld}
-            onClick={() => setSelectedField(feld)}
+            onClick={() => setShowInsuranceFolder(true)}
             className="text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
           >
             <div className="flex items-center gap-2 font-medium">
-              {icons[feld]}
-              {feld}
+              <Folder className="w-5 h-5 text-red-500" />
+              Versicherungsordner
             </div>
             <div className="text-sm text-gray-600">
-              {highlightMatch(beschreibungen[feld], searchQuery)}
+              Verwalte deine bestehenden Verträge und sieh dir empfohlene Produkte an.
             </div>
           </button>
-        ))}
-      </div>
-
-      <section className="mt-10">
-        <h2 className="text-xl font-bold mb-4">Persönlicher Bedarfscheck</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">     
-          <button
-            onClick={() => setShowBedarfscheckModal(true)}
-            className="col-span-2 text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
-          >
-            <div className="flex items-center gap-2 font-medium">
-              <HelpCircle className="w-5 h-5 text-red-500" />
-              Bedarfsanalyse starten
-            </div>
-            <div className="text-sm text-gray-600">
-              Finde heraus, welche Versicherungen zu deiner Lebenssituation passen.
-            </div>
-          </button>
-
-            {showBedarfscheckModal && (
-              <Dialog open={showBedarfscheckModal} onClose={() => {
-                setShowBedarfscheckModal(false);
-                setShowResultsModal(false);
-                setSelectedAnswers({});
-              }}>
-                <div className="p-6 space-y-6">
-                  <h2 className="text-xl font-semibold">Bedarfsanalyse</h2>
-                  <div className="space-y-4">
-                    {questions.map((frage, index) => (
-                      <div key={index} className="space-y-1">
-                        <p className="font-medium text-sm">{frage}</p>
-                        <div className="flex space-x-4 text-sm">
-                          <label>
-                            <input
-                              type="radio"
-                              name={`frage-${index}`}
-                              value="ja"
-                              checked={selectedAnswers[index] === "ja"}
-                              onChange={(e) => handleAnswerChange(index, e.target.value)}
-                            /> Ja
-                          </label>
-                          <label>
-                            <input
-                              type="radio"
-                              name={`frage-${index}`}
-                              value="nein"
-                              checked={selectedAnswers[index] === "nein"}
-                              onChange={(e) => handleAnswerChange(index, e.target.value)}
-                            /> Nein
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="pt-4">
-                    <button
-                      onClick={() => {
-                        const gewichteteEmpfehlungen: Record<string, number> = {};
-                        Object.entries(selectedAnswers).forEach(([frageIndex, antwort]) => {
-                          if (antwort === "ja") {
-                            const empfohlene = recommendations[parseInt(frageIndex)];
-                            empfohlene?.forEach(({ produkt, gewichtung }) => {
-                              gewichteteEmpfehlungen[produkt] = (gewichteteEmpfehlungen[produkt] || 0) + gewichtung;
-                            });
-                          }
-                        });
-
-                        const resultProducts = Object.entries(gewichteteEmpfehlungen)
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([produkt]) => produkt);
-
-                        setRecommendedProducts(resultProducts); // 🔥 Empfehlungen JETZT sofort setzen
-                        setShowResultsModal(true);
-                      }}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
-                    >
-                      Ergebnisse anzeigen
-                    </button>   
-                  </div>
-                </div>
-              </Dialog>
-            )}
-
-            {showResultsModal && (
-              <Dialog open={showResultsModal} onClose={() => setShowResultsModal(false)}>
-                <div className="p-6">
-                  <h2 className="text-xl font-semibold mb-4">Empfohlene Produkte</h2>
-                  <ul className="space-y-2">
-                    {getRecommendations().map(({ produkt, gewichtung }) => (
-                      <li key={produkt}>
-                        <button
-                          onClick={() => handleRecommendationClick(produkt)}
-                          className="w-full text-left p-3 border border-gray-200 rounded-xl hover:bg-gray-50 flex justify-between items-center"
-                        >
-                          <span>{produkt}</span>
-                          <span className="text-sm text-gray-500">{gewichtung}/5</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {/* HIER NEU: Button Empfehlungen übernehmen */}
-                  <div className="pt-4 flex gap-4 items-center">
-                    <button
-                      onClick={handleSaveRecommendations}
-                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
-                    >
-                      Empfehlungen übernehmen
-                    </button>
-
-                    <button
-                      onClick={() => setShowResultsModal(false)}
-                      className="text-sm text-blue-600 hover:underline"
-                    >
-                      Zurück zur Analyse
-                    </button>
-                  </div>
-                </div>
-              </Dialog>
-            )}
         </div>
-      </section>
-      
-      
-      {/* Anleitungen (Videoanleitungen) */}
-      <section>
-        <h2 className="text-xl font-bold mb-4">Anleitungen</h2>
-        <button
-          onClick={() => window.open("https://www.youtube.com/playlist?list=PLdqEaCkhdFEOk89VjuysfqmrHehs59QZb", "_blank")}
-          className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg border border-gray-200 transition text-left w-full"
-        >
-          <div className="flex items-start gap-2">
-            <div className="pt-0">
-              <Video className="w-5 h-6 text-red-500" />
-            </div>
-            <div>
-              <h3 className="text font-medium">Videoanleitungen</h3>
-              <p className="text-sm text-gray-600">Die wichtigsten Features in kurzen Videos erklärt.</p>
-            </div>
-          </div>
-        </button>
-      </section>
 
+        <div>
+          <section>
+              <h2 className="text-xl font-bold mb-4">Jetzt neue Versicherungen finden</h2>
+          </section>
+          <div className="relative mb-6">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Suche nach Versicherung oder Thema..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring focus:border-blue-300"
+              />
+          </div>
+        </div>
       
-    </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredFields.length === 0 && (
+            <div className="text-gray-500 italic">Keine passenden Kategorien oder Produkte gefunden.</div>
+          )}
+          {filteredFields.map(([feld]) => {
+            const ampelStatus = getAmpelStatusForField(feld);
+
+            return (
+              <button
+                key={feld}
+                onClick={() => setSelectedField(feld)}
+                className="text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full flex justify-between items-start"
+              >
+                <div>
+                  <div className="flex items-center gap-2 font-medium">
+                    {icons[feld]}
+                    {feld}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {highlightMatch(beschreibungen[feld], searchQuery)}
+                  </div>
+                </div>
+                <Ampel status={getAmpelStatusForField(feld)} />
+              </button>
+            );
+          })}
+        </div>
+
+        <section className="mt-10">
+          <h2 className="text-xl font-bold mb-4">Persönlicher Bedarfscheck</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">     
+            <button
+              onClick={() => setShowBedarfscheckModal(true)}
+              className="col-span-2 text-left bg-white rounded-2xl shadow-md p-6 space-y-2 border border-gray-200 hover:border-gray-400 hover:shadow-lg transition w-full"
+            >
+              <div className="flex items-center gap-2 font-medium">
+                <HelpCircle className="w-5 h-5 text-red-500" />
+                Bedarfsanalyse starten
+              </div>
+              <div className="text-sm text-gray-600">
+                Finde heraus, welche Versicherungen zu deiner Lebenssituation passen.
+              </div>
+            </button>
+
+              {showBedarfscheckModal && (
+                <Dialog open={showBedarfscheckModal} onClose={() => {
+                  setShowBedarfscheckModal(false);
+                  setShowResultsModal(false);
+                  setSelectedAnswers({});
+                }}>
+                  <div className="p-6 space-y-6">
+                    <h2 className="text-xl font-semibold">Bedarfsanalyse</h2>
+                    <div className="space-y-4">
+                      {questions.map((frage, index) => (
+                        <div key={index} className="space-y-1">
+                          <p className="font-medium text-sm">{frage}</p>
+                          <div className="flex space-x-4 text-sm">
+                            <label>
+                              <input
+                                type="radio"
+                                name={`frage-${index}`}
+                                value="ja"
+                                checked={selectedAnswers[index] === "ja"}
+                                onChange={(e) => handleAnswerChange(index, e.target.value)}
+                              /> Ja
+                            </label>
+                            <label>
+                              <input
+                                type="radio"
+                                name={`frage-${index}`}
+                                value="nein"
+                                checked={selectedAnswers[index] === "nein"}
+                                onChange={(e) => handleAnswerChange(index, e.target.value)}
+                              /> Nein
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-4">
+                      <button
+                        onClick={() => {
+                          const gewichteteEmpfehlungen: Record<string, number> = {};
+                          Object.entries(selectedAnswers).forEach(([frageIndex, antwort]) => {
+                            if (antwort === "ja") {
+                              const empfohlene = recommendations[parseInt(frageIndex)];
+                              empfohlene?.forEach(({ produkt, gewichtung }) => {
+                                gewichteteEmpfehlungen[produkt] = (gewichteteEmpfehlungen[produkt] || 0) + gewichtung;
+                              });
+                            }
+                          });
+
+                          const resultProducts = Object.entries(gewichteteEmpfehlungen)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([produkt]) => produkt);
+
+                          setRecommendedProducts(resultProducts); // 🔥 Empfehlungen JETZT sofort setzen
+                          setShowResultsModal(true);
+                        }}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
+                      >
+                        Ergebnisse anzeigen
+                      </button>   
+                    </div>
+                  </div>
+                </Dialog>
+              )}
+
+              {showResultsModal && (
+                <Dialog open={showResultsModal} onClose={() => setShowResultsModal(false)}>
+                  <div className="p-6">
+                    <h2 className="text-xl font-semibold mb-4">Empfohlene Produkte</h2>
+                    <ul className="space-y-2">
+                      {getRecommendations().map(({ produkt, gewichtung }) => (
+                        <li key={produkt}>
+                          <button
+                            onClick={() => handleRecommendationClick(produkt)}
+                            className="w-full text-left p-3 border border-gray-200 rounded-xl hover:bg-gray-50 flex justify-between items-center"
+                          >
+                            <span>{produkt}</span>
+                            <span className="text-sm text-gray-500">{gewichtung}/5</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* HIER NEU: Button Empfehlungen übernehmen */}
+                    <div className="pt-4 flex gap-4 items-center">
+                      <button
+                        onClick={handleSaveRecommendations}
+                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
+                      >
+                        Empfehlungen übernehmen
+                      </button>
+
+                      <button
+                        onClick={() => setShowResultsModal(false)}
+                        className="text-sm text-blue-600 hover:underline"
+                      >
+                        Zurück zur Analyse
+                      </button>
+                    </div>
+                  </div>
+                </Dialog>
+              )}
+          </div>
+        </section>
+        
+        
+        {/* Anleitungen (Videoanleitungen) */}
+        <section>
+          <h2 className="text-xl font-bold mb-4">Anleitungen</h2>
+          <button
+            onClick={() => window.open("https://www.youtube.com/playlist?list=PLdqEaCkhdFEOk89VjuysfqmrHehs59QZb", "_blank")}
+            className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg border border-gray-200 transition text-left w-full"
+          >
+            <div className="flex items-start gap-2">
+              <div className="pt-0">
+                <Video className="w-5 h-6 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text font-medium">Videoanleitungen</h3>
+                <p className="text-sm text-gray-600">Die wichtigsten Features in kurzen Videos erklärt.</p>
+              </div>
+            </div>
+          </button>
+        </section>
+
+        
+      </div>
+    </>
   );
 }
 
