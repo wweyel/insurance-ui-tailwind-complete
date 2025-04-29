@@ -469,45 +469,67 @@ const kriterien: Record<string, string[]> = {
 
 // 🔥 Vergleichsbild-Modal-Komponente (Vollformatig)
 const ComparisonImageModal = ({
-open,
-onClose,
-imageUrl
+  open,
+  onClose,
+  imageUrl,
 }: {
-open: boolean;
-onClose: () => void;
-imageUrl: string;
+  open: boolean;
+  onClose: () => void;
+  imageUrl: string;
 }) => {
-if (!open) return null;
+  if (!open) return null;
 
-return (
-  <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
-    <div className="relative w-full h-full flex items-center justify-center">
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black bg-opacity-80">
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 text-white text-2xl hover:text-gray-300 z-50"
+        className="absolute top-4 right-4 text-white text-3xl font-bold z-50"
       >
-        ❌
+        ✖
       </button>
-      <img src={imageUrl} alt="Vergleichsbild" className="w-full h-full object-contain" />
+      <img
+        src={imageUrl}
+        alt="Vergleichsbild"
+        className="max-w-[90vw] max-h-[90vh] object-contain shadow-2xl rounded-lg"
+      />
     </div>
-  </div>
-);
+  );
 };
 
-const GaugeChart = ({ percentage, totalProducts, coveredProducts }: { percentage: number; totalProducts: number; coveredProducts: number; }) => {
+
+const GaugeChart = ({
+  percentage,
+  totalProducts,
+  coveredProducts,
+}: {
+  percentage: number;
+  totalProducts: number;
+  coveredProducts: number;
+}) => {
   const { animatedValue } = useSpring({
     from: { animatedValue: 0 },
     to: { animatedValue: percentage },
     config: { duration: 1000 },
   });
 
-  const text = totalProducts === 0
-    ? "Keine Empfehlungen vorhanden."
-    : `${coveredProducts} von ${totalProducts} empfohlenen Produkt${totalProducts > 1 ? 'en' : ''} ${coveredProducts === 1 ? 'ist' : 'sind'} abgedeckt.`;
+  // Neue Farblogik (angepasst an Ampel)
+  const getColorForPercentage = (p: number) => {
+    if (p < 25) return "#f87171";     // rot
+    if (p < 50) return "#fb923c";     // orange
+    if (p < 90) return "#facc15";     // gelb bis 89%
+    return "#4ade80";                 // grün ab 90%
+  };
+
+  const text =
+    totalProducts === 0
+      ? "Keine Empfehlungen vorhanden."
+      : `${coveredProducts} von ${totalProducts} empfohlenen Produkt${
+          totalProducts > 1 ? "en" : ""
+        } ${coveredProducts === 1 ? "ist" : "sind"} abgedeckt.`;
 
   return (
     <div className="relative w-56 h-56 flex flex-col items-center justify-center">
-      {/* Tacho */}
+      {/* Tacho-Grafik */}
       <ResponsiveContainer width="100%" height="100%">
         <RadialBarChart
           cx="50%"
@@ -524,17 +546,12 @@ const GaugeChart = ({ percentage, totalProducts, coveredProducts }: { percentage
             clockWise
             dataKey="value"
             cornerRadius={10}
-            fill={
-              percentage < 25 ? "#f87171" :
-              percentage < 50 ? "#fb923c" :
-              percentage < 75 ? "#facc15" :
-              "#4ade80"
-            }
+            fill={getColorForPercentage(percentage)}
           />
         </RadialBarChart>
       </ResponsiveContainer>
 
-      {/* Prozentzahl */}
+      {/* Prozentanzeige */}
       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[70%] text-center">
         <animated.div className="text-3xl font-bold leading-none">
           {animatedValue.to((n) => `${Math.round(n)}%`)}
@@ -542,7 +559,7 @@ const GaugeChart = ({ percentage, totalProducts, coveredProducts }: { percentage
         <div className="text-xs text-gray-500">Deine Absicherung</div>
       </div>
 
-      {/* Text direkt unter dem Tacho, ohne extra Abstand */}
+      {/* Infozeile */}
       <div className="absolute bottom-2 text-center text-sm text-gray-600">
         {text}
       </div>
@@ -573,7 +590,10 @@ export default function App() {
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [contracts, setContracts] = useState<Contract[]>(initialContracts);
   const [showInsuranceFolder, setShowInsuranceFolder] = useState(false);
-  const [recommendedProducts, setRecommendedProducts] = useState<string[]>([]);
+  const storedRecommendations = localStorage.getItem("recommendedProducts");
+  const [recommendedProducts, setRecommendedProducts] = useState<{ produkt: string, gewichtung: number }[]>(
+    storedRecommendations ? JSON.parse(storedRecommendations) : []
+  );
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [sortField, setSortField] = useState<string>("versicherer");
@@ -597,6 +617,20 @@ export default function App() {
       maximumFractionDigits: 2,
     });
   };
+
+  const getSortedRecommendedProductsFromStorage = () => {
+    return [...recommendedProducts].sort((a, b) => {
+      if (sortField === 'gewichtung') {
+        return sortDirection === 'asc' ? a.gewichtung - b.gewichtung : b.gewichtung - a.gewichtung;
+      }
+      if (sortField === 'produkt') {
+        return sortDirection === 'asc'
+          ? a.produkt.localeCompare(b.produkt)
+          : b.produkt.localeCompare(a.produkt);
+      }
+      return 0;
+    });
+  };  
 
   // Zustände für das Formular zum Hinzufügen eines neuen Vertrags
   const [newVersicherer, setNewVersicherer] = useState("");
@@ -648,21 +682,16 @@ export default function App() {
         imageUrl = "/Kfz.png";
         break;
       default:
-        imageUrl = "";
-        break;
+        return;
     }
   
-    if (imageUrl) {
+    setSelectedProduct(null); // Drawer schließen
+    setTimeout(() => {
       setComparisonImage(imageUrl);
       setShowComparisonImageModal(true);
-    }
-
-    if (product === "Privathaftpflicht") {
-      imageUrl = "/PHV.png";
-      setComparisonImage(imageUrl);
-      setShowComparisonImageModal(true);
-    }
-  };
+    }, 300); // Warten, bis der Drawer zu ist
+  };  
+  
 
   const questions = [
     "Hast du Kinder oder planst du in nächster Zeit Nachwuchs?",
@@ -757,7 +786,7 @@ export default function App() {
   
   const saveRecommendationsToContracts = () => {
       const updatedContracts = contracts.map(contract => {
-        if (recommendedProducts.includes(contract.versicherungsart)) {
+        if (recommendedProducts.some(r => r.produkt === contract.versicherungsart)) {
           return { ...contract, status: "empfohlen" };
         }
         return contract;
@@ -783,22 +812,20 @@ export default function App() {
     toast.success('Empfohlene Produkte wurden erfolgreich übernommen!');
   };
 
-  const getAmpelStatusForField = (feld: string): "red" | "yellow" | "green" => {
+  const getAmpelStatusForField = (feld: string): "red" | "yellow" | "green" | "gray" => {
     const produkteInFeld = versicherungen[feld];
-    if (!produkteInFeld) {
-      return "red"; // Wenn das Feld nicht existiert, Ampel einfach auf Rot
-    }
+    if (!produkteInFeld) return "gray"; // kein Feld gefunden
   
-    const recommendedProductsImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const recommendedInField = recommendedProducts.filter(r => produkteInFeld.includes(r.produkt));
     const vorhandeneProdukte = contracts
       .filter(c => c.status !== "ehemalig")
       .map(c => c.versicherungsart);
   
-    const bereitsAbgedeckt = recommendedProductsImFeld.filter(p => vorhandeneProdukte.includes(p));
-    const total = recommendedProductsImFeld.length;
-    const erfüllt = bereitsAbgedeckt.length;
+    const abgedeckte = recommendedInField.filter(r => vorhandeneProdukte.includes(r.produkt));
+    const total = recommendedInField.length;
+    const erfüllt = abgedeckte.length;
   
-    if (total === 0) return "gray"; // keine Empfehlungen => neutral anzeigen
+    if (total === 0) return "gray";
   
     const quote = erfüllt / total;
   
@@ -806,7 +833,7 @@ export default function App() {
     if (quote < 0.25) return "red";
     return "yellow";
   };
-
+  
   // Ampel mit Mouseover-Tooltip
   const Ampel = ({ status, hasRecommendations }: { status: "red" | "yellow" | "green" | "gray"; hasRecommendations: boolean }) => {
     const tooltipText = hasRecommendations
@@ -835,7 +862,7 @@ export default function App() {
       return "Keine Empfehlungen vorhanden.";
     }
   
-    const recommendedProductsImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const recommendedProductsImFeld = recommendedProducts.filter(r => produkteInFeld.includes(r.produkt));
     const vorhandeneProdukte = contracts
       .filter(c => c.status !== "ehemalig")
       .map(c => c.versicherungsart);
@@ -858,7 +885,7 @@ export default function App() {
     const produkteInFeld = versicherungen[feld];
     if (!produkteInFeld) return 0;
   
-    const recommendedProductsImFeld = recommendedProducts.filter(p => produkteInFeld.includes(p));
+    const recommendedProductsImFeld = recommendedProducts.filter(r => produkteInFeld.includes(r.produkt));
     const vorhandeneProdukte = contracts
       .filter(c => c.status !== "ehemalig")
       .map(c => c.versicherungsart);
@@ -880,14 +907,14 @@ export default function App() {
   // Jetzt kannst du das Set erstellen
   const existingInsurancesSet = new Set(existingInsurances);
 
-  const matchingProducts = recommendedProducts.filter(produkt => existingInsurancesSet.has(produkt));
+  const matchingProducts = recommendedProducts.filter(r => existingInsurancesSet.has(r.produkt));
 
   // Überprüfen, welche empfohlenen Versicherungen vorhanden sind
   const allProductsPresent = matchingProducts.length === recommendedProducts.length;
 
   // Ampelstatus basierend auf vorhandenen Versicherungen und Empfehlungen
   const allRecommendedProducts = recommendedProducts;
-  const matchedProducts = recommendedProducts.filter(produkt => existingInsurancesSet.has(produkt));
+  const matchedProducts = recommendedProducts.filter(r => existingInsurancesSet.has(r.produkt));
 
   const statusAmpel = [
     !Object.keys(answers).length && { color: "red", text: "Bedarfscheck fehlt" },
@@ -913,7 +940,7 @@ export default function App() {
 
   const handleAddContract = (e: FormEvent) => {
     e.preventDefault();
-    const isRecommended = recommendedProducts.includes(newVersicherungsart);
+    const isRecommended = recommendedProducts.some(r => r.produkt === produkt);
     
     const newContract: Contract = {
       id: String(Date.now()),
@@ -979,12 +1006,8 @@ export default function App() {
   }, [showComparisonModal]);
 
   useEffect(() => {
-      localStorage.setItem("recommendedProducts", JSON.stringify(recommendedProducts));
+    localStorage.setItem("recommendedProducts", JSON.stringify(recommendedProducts));
   }, [recommendedProducts]);
-
-  useEffect(() => {
-    localStorage.setItem("recommendedProducts", JSON.stringify(recommendedProducts || []));
-}, [recommendedProducts]);
 
   useEffect(() => {
       const gewichteteEmpfehlungen: Record<string, number> = {};
@@ -1122,20 +1145,28 @@ export default function App() {
 
         {/* Dialog-Modal für ausgewähltes Versicherungsfeld */}
         <Dialog open={!!selectedField} onClose={() => setSelectedField(null)}>
-          <div className="relative">
-            {/* Titel */}
-            <h3 className="text-lg font-semibold mb-2">{selectedField}</h3>
+          <div className="relative max-w-3xl mx-auto px-6 pt-8 pb-6">
+            {/* Schließen-Button */}
+            <button
+              onClick={() => setSelectedField(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-50"
+            >
+              ✖
+            </button>
 
-            {/* Neuer Tacho + Info-Text */}
-            <div className="flex flex-col items-center gap-2 mt-2 mb-8">
+            {/* Titel */}
+            <h3 className="text-xl font-semibold mb-6">{selectedField}</h3>
+
+            {/* Tacho */}
+            <div className="flex flex-col items-center gap-2 mb-8">
               {selectedField && (() => {
                 const produkteInFeld = versicherungen[selectedField] || [];
-                const empfohleneProdukte = recommendedProducts.filter(p => produkteInFeld.includes(p));
+                const empfohleneProdukte = recommendedProducts.filter(r => produkteInFeld.includes(r.produkt));
                 const vorhandeneProdukte = contracts
-                  .filter(c => c.status !== "ehemalig") // 🛡️ Nur aktive Verträge zählen!
+                  .filter(c => c.status !== "ehemalig")
                   .map(c => c.versicherungsart);
 
-                const abgedeckteProdukte = empfohleneProdukte.filter(p => vorhandeneProdukte.includes(p));
+                const abgedeckteProdukte = empfohleneProdukte.filter(r => vorhandeneProdukte.includes(r.produkt));
                 const totalEmpfohlene = empfohleneProdukte.length;
                 const totalAbgedeckt = abgedeckteProdukte.length;
                 const percentage = totalEmpfohlene === 0 ? 0 : Math.round((totalAbgedeckt / totalEmpfohlene) * 100);
@@ -1150,49 +1181,44 @@ export default function App() {
               })()}
             </div>
 
-
-            {/* Produkte auflisten */}
+            {/* Produktliste */}
             <div className="grid gap-3">
-            {selectedField &&
-              versicherungen[selectedField].map((produkt) => {
-                const isRecommended = recommendedProducts.includes(produkt);
-                const isCovered = contracts
-                  .filter(contract => contract.status !== "ehemalig") // 🛡️ Nur aktive Verträge berücksichtigen!
-                  .some(contract => contract.versicherungsart === produkt);
+              {selectedField &&
+                versicherungen[selectedField].map((produkt) => {
+                  const isRecommended = recommendedProducts.some(r => r.produkt === produkt);
+                  const isCovered = contracts
+                    .filter(contract => contract.status !== "ehemalig")
+                    .some(contract => contract.versicherungsart === produkt);
 
-                return (
-                  <button
-                    key={produkt}
-                    onClick={() => setSelectedProduct(produkt)}
-                    className="bg-gray-50 p-3 rounded-xl text-left hover:bg-gray-100 transition flex justify-between items-center"
-                  >
-                    <div className="flex items-center gap-2 font-medium">
-                      {productIcons[produkt]}
-                      {/* Produktname */}
-                      {highlightMatch(produkt, searchQuery)}
-                      {/* Empfohlen-Icon direkt danach */}
-                      {isRecommended && (
-                        <div className="group relative text-yellow-400">
-                          <Star className="w-4 h-4" />
+                  return (
+                    <button
+                      key={produkt}
+                      onClick={() => setSelectedProduct(produkt)}
+                      className="bg-gray-50 p-3 rounded-xl text-left hover:bg-gray-100 transition flex justify-between items-center"
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        {productIcons[produkt]}
+                        {highlightMatch(produkt, searchQuery)}
+                        {isRecommended && (
+                          <div className="group relative text-yellow-400">
+                            <Star className="w-4 h-4" />
+                            <div className="absolute bottom-full mb-1 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 w-max mx-auto z-10">
+                              Empfohlenes Produkt
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {isCovered && (
+                        <div className="group relative text-green-500">
+                          ✅
                           <div className="absolute bottom-full mb-1 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 w-max mx-auto z-10">
-                            Empfohlenes Produkt
+                            Vertrag vorhanden
                           </div>
                         </div>
                       )}
-                    </div>
-
-                    {/* Rechts außen: Vertrag vorhanden */}
-                    {isCovered && (
-                      <div className="group relative text-green-500">
-                        ✅
-                        <div className="absolute bottom-full mb-1 hidden group-hover:block bg-black text-white text-xs rounded py-1 px-2 w-max mx-auto z-10">
-                          Vertrag vorhanden
-                        </div>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
             </div>
           </div>
         </Dialog>
@@ -1286,8 +1312,8 @@ export default function App() {
                   </div>
 
                   {/* Empfehlungslisten */}
-                  {sortedRecommendedProducts.length > 0 ? (
-                    sortedRecommendedProducts
+                  {getSortedRecommendedProductsFromStorage().length > 0 ? (
+                    getSortedRecommendedProductsFromStorage()
                       .filter(({ produkt }) => !showOnlyMissing || !isCovered(produkt))
                       .map(({ produkt, gewichtung }) => (
                         <div key={produkt} className="relative">
@@ -1502,51 +1528,21 @@ export default function App() {
         </Dialog>
 
 
-        {/* Drawer (Sheet) für detaillierte Produktbeschreibung */}
-        <Sheet open={!!selectedProduct} onClose={() => setSelectedProduct(null)}>
-          {selectedProduct && (
-            <>
-              <div className="space-y-4 text-sm text-gray-700 p-6">
-                <h4 className="text-xl font-semibold">{selectedProduct}</h4>
-                <p className="whitespace-pre-wrap leading-relaxed">
-                  {tooltipTexte[selectedProduct] || "Keine detaillierten Informationen verfügbar."}
-                </p>
-                <div className="mt-4">
-                  <strong>Wichtige Leistungskriterien:</strong>
-                  {kriterien[selectedProduct] ? (
-                    <ul className="list-disc ml-5 mt-1">
-                      {kriterien[selectedProduct].map((punkt, index) => (
-                        <li key={index} className="text-sm">
-                          {punkt}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="text-sm">Keine weiteren Kriterien verfügbar.</div>
-                  )}
-                </div>
-                <div className="text-sm">
-                  <strong>Vergleich:</strong>{" "}
-                  <a
-                    onClick={() => handleOpenComparisonModal(selectedProduct || "")}
-                    className="text-sm text-blue-600 hover:underline cursor-pointer"
-                  >
-                    Zum Vergleichsrechner
-                  </a>
-                </div>
-              </div>
-            </>
-          )}
-        </Sheet>
-
         {/* Der restliche JSX-Code sauber strukturiert hier einmalig */}
 
-        <ComparisonImageModal open={showComparisonImageModal} onClose={() => setShowComparisonImageModal(false)} imageUrl={comparisonImage} />
+        <ComparisonImageModal
+          open={showComparisonImageModal}
+          imageUrl={comparisonImage}
+          onClose={() => {
+            setShowComparisonImageModal(false);
+            setComparisonImage(""); // 🧼 Bild leeren
+          }}
+        />
 
       
         {/* Vergleichsrechner Modal */}
         {showComparisonModal && (
-          <div className="fixed inset-0 bg-black/70 z-[100] flex justify-center items-center">
+          <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-lg transition-transform duration-300 transform translate-x-0 z-60">
             <div className="relative w-full max-w-6xl h-full sm:h-[80vh] bg-white rounded-xl shadow-xl overflow-hidden">
               <button
                 onClick={() => setShowComparisonModal(false)}
@@ -1701,9 +1697,9 @@ export default function App() {
 
                           const resultProducts = Object.entries(gewichteteEmpfehlungen)
                             .sort((a, b) => b[1] - a[1])
-                            .map(([produkt]) => produkt);
+                            .map(([produkt, gewichtung]) => ({ produkt, gewichtung }));
 
-                          setRecommendedProducts(resultProducts); // 🔥 Empfehlungen JETZT sofort setzen
+                          setRecommendedProducts(resultProducts);
                           setShowResultsModal(true);
                         }}
                         className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition"
@@ -1716,52 +1712,56 @@ export default function App() {
               )}
 
               {showResultsModal && (
-                <Dialog open={showResultsModal} onClose={() => {
-                  setShowResultsModal(false);
-                  setShowBedarfscheckModal(false);
-                }}>
-                  <div className="p-6">
-                    <h2 className="text-xl font-semibold mb-4">Empfohlene Produkte</h2>
-                    {/* Ergänzung: Überschriften im Bedarfsanalyse-Ergebnis */}
-                    <div className="grid grid-cols-6 gap-2 text-sm font-semibold text-gray-500 px-2 mb-2 mt-6">
-                      <div className="col-span-4">Versicherungsart</div>
-                      <div className="col-span-2 text-center">Wichtigkeit</div>
-                    </div>
-                    <ul className="space-y-2">
-                      {getRecommendations().map(({ produkt, gewichtung }) => (
-                        <li key={produkt}>
-                          <button
-                            onClick={() => handleRecommendationClick(produkt)}
-                            className="w-full text-left p-3 border border-gray-200 rounded-xl hover:bg-gray-50 flex justify-between items-center"
-                          >
-                            <span>{produkt}</span>
-                            <span className="text-sm text-gray-500">{gewichtung}/5</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {/* HIER NEU: Button Empfehlungen übernehmen */}
-                    <div className="pt-4 flex gap-4 items-center">
-                      <button
-                        onClick={handleSaveRecommendations}
-                        className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
-                      >
-                        Empfehlungen übernehmen
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setShowResultsModal(false);
-                          setShowBedarfscheckModal(false);
-                        }}
-                        className="text-sm text-blue-600 hover:underline"
-                      >
-                        Zurück zur Analyse
-                      </button>
+                <Dialog open={showResultsModal} onClose={() => setShowResultsModal(false)}>
+                  <div className="relative">
+                    {/* Schließen-Button immer sichtbar oben rechts */}
+                    <button
+                      onClick={() => setShowResultsModal(false)}
+                      className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-50"
+                    >
+                      ✖
+                    </button>
+                
+                    {/* Inhalt, ggf. abgedunkelt */}
+                    <div className={`p-6 pt-12 transition-all ${selectedProduct ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+                      <h2 className="text-xl font-semibold mb-4">Empfohlene Produkte</h2>
+                      <ul className="space-y-2">
+                        {getRecommendations().map(({ produkt, gewichtung }) => (
+                          <li key={produkt}>
+                            <button
+                              onClick={() => handleRecommendationClick(produkt)}
+                              className="w-full flex justify-between items-center px-4 py-3 border border-gray-200 rounded-xl bg-white hover:bg-gray-50 transition-shadow hover:shadow-md"
+                            >
+                              <span className="text-sm font-medium text-gray-800">{produkt}</span>
+                              <span className="text-sm text-gray-500 font-normal">
+                                Wichtigkeit <span className="font-semibold">{gewichtung}/5</span>
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                
+                      <div className="pt-4 flex gap-4 items-center">
+                        <button
+                          onClick={handleSaveRecommendations}
+                          className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition"
+                        >
+                          Empfehlungen übernehmen
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowResultsModal(false);
+                            setShowBedarfscheckModal(false);
+                          }}
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          Zurück zur Analyse
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </Dialog>
+              
               )}
           </div>
         </section>
@@ -1788,6 +1788,48 @@ export default function App() {
 
         
       </div>
+      {/* Overlay, um den Hintergrund bei offenem Drawer zu verdunkeln */}
+      {!!selectedProduct && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50"
+          onClick={() => setSelectedProduct(null)}
+        ></div>
+      )}
+
+      {/* Drawer (Sheet) für detaillierte Produktbeschreibung */}
+      <Sheet open={!!selectedProduct} onClose={() => setSelectedProduct(null)}>
+        {selectedProduct && (
+          <div className="space-y-6 text-sm text-gray-700 px-6 pt-8 pb-10 max-w-[500px] mx-auto">
+            <h4 className="text-xl font-semibold">{selectedProduct}</h4>
+            <p className="whitespace-pre-wrap leading-relaxed">
+              {tooltipTexte[selectedProduct] || "Keine detaillierten Informationen verfügbar."}
+            </p>
+            <div className="mt-4">
+              <strong>Wichtige Leistungskriterien:</strong>
+              {kriterien[selectedProduct] ? (
+                <ul className="list-disc ml-5 mt-1">
+                  {kriterien[selectedProduct].map((punkt, index) => (
+                    <li key={index} className="text-sm">
+                      {punkt}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-sm">Keine weiteren Kriterien verfügbar.</div>
+              )}
+            </div>
+            <div className="text-sm">
+              <strong>Vergleich:</strong>{" "}
+              <a
+                onClick={() => handleOpenComparisonModal(selectedProduct || "")}
+                className="text-sm text-blue-600 hover:underline cursor-pointer"
+              >
+                Zum Vergleichsrechner
+              </a>
+            </div>
+          </div>
+        )}
+      </Sheet>
     </>
   );
 }

@@ -19,13 +19,14 @@ export function Dialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 shadow-xl relative w-full max-w-4xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black bg-opacity-50" onClick={onClose}></div>
+      <div className="relative bg-white rounded-xl shadow-lg max-w-xl w-full">
         <button
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
           onClick={onClose}
-          className="absolute top-4 right-4 text-blue-600 hover:underline"
         >
-          Schließen
+          ✖️
         </button>
         {children}
       </div>

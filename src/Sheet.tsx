@@ -19,18 +19,13 @@ export function Sheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 flex justify-end z-50">
-      {/* Halbtransparenter Hintergrund (zum Schließen) */}
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      {/* Inhalt */}
-      <div className="relative w-full sm:w-96 bg-white p-6 shadow-xl h-full overflow-auto">
-        <button
-          onClick={onClose}
-          className="text-blue-600 hover:underline mb-4 absolute top-4 right-4"
-        >
-          Schließen
+    <div className="fixed inset-0 z-[1000] flex justify-end">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose}></div>
+      <div className="relative bg-white w-full max-w-md h-full shadow-xl overflow-auto">
+        <button className="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onClick={onClose}>
+          ✖️
         </button>
-        <div className="mt-10">{children}</div>
+        {children}
       </div>
     </div>
   );
